@@ -58,6 +58,34 @@
 | `src/apps/performances/tests/test_phase_service.py` | PhaseService テスト 9 ケース |
 | `src/apps/performances/tests/test_models.py` | モデルテスト |
 
+### Week 3 — ダブルブッキング防止（AssignmentService）
+
+| ファイル | 内容 |
+|---------|------|
+| `src/apps/performances/exceptions.py` | `ConflictError`（ダブルブッキング用カスタム例外） |
+| `src/apps/performances/services/assignment_service.py` | **最重要** 重複チェック付き人員・車輌割当 |
+| `src/apps/performances/tests/test_assignment_service.py` | 重複チェックのテスト 12 ケース（全 PASSED） |
+| `src/config/settings_test.py` | テスト用設定（インメモリ SQLite・LocMemCache） |
+| `requirements.txt` | pytest / pytest-django を追加 |
+| `pyproject.toml` | `DJANGO_SETTINGS_MODULE` を `config.settings_test` に変更 |
+
+#### Week 3 で実装した仕様メモ
+
+```
+AssignmentService.confirm_staff_assignment(slot, user, occupied_start, occupied_end, position=None)
+  ├─ select_for_update() で対象スタッフの割当レコードを行ロック
+  ├─ 半開区間 [occupied_start, occupied_end) で重複チェック
+  │    条件: existing.occupied_start < new.occupied_end
+  │          AND existing.occupied_end > new.occupied_start
+  └─ 重複あり → ConflictError を raise（DB 保存なし）
+
+AssignmentService.confirm_vehicle_assignment(operation, vehicle, driver_user=None, is_external_driver=False)
+  ├─ vehicle.is_external == True → チェックをスキップ（外注車輌は複数工程割当が前提）
+  ├─ operation.scheduled_start/end が None → チェックをスキップ（確定時間未設定）
+  ├─ select_for_update() で対象車輌の割当レコードを行ロック
+  └─ 重複あり → ConflictError を raise
+```
+
 ### Week 4 — 単価・原価管理 + 乖離分析（DashboardQueryService）
 
 | ファイル | 内容 |
@@ -86,34 +114,6 @@ DashboardQueryService.get_schedule_drifts(threshold_minutes=30)
 
 DashboardQueryService.get_unlocked_past_slots()
   └─ phase__suggested_date < today かつ status != LOCKED
-```
-
-### Week 3 — ダブルブッキング防止（AssignmentService）
-
-| ファイル | 内容 |
-|---------|------|
-| `src/apps/performances/exceptions.py` | `ConflictError`（ダブルブッキング用カスタム例外） |
-| `src/apps/performances/services/assignment_service.py` | **最重要** 重複チェック付き人員・車輌割当 |
-| `src/apps/performances/tests/test_assignment_service.py` | 重複チェックのテスト 12 ケース（全 PASSED） |
-| `src/config/settings_test.py` | テスト用設定（インメモリ SQLite・LocMemCache） |
-| `requirements.txt` | pytest / pytest-django を追加 |
-| `pyproject.toml` | `DJANGO_SETTINGS_MODULE` を `config.settings_test` に変更 |
-
-#### Week 3 で実装した仕様メモ
-
-```
-AssignmentService.confirm_staff_assignment(slot, user, occupied_start, occupied_end, position=None)
-  ├─ select_for_update() で対象スタッフの割当レコードを行ロック
-  ├─ 半開区間 [occupied_start, occupied_end) で重複チェック
-  │    条件: existing.occupied_start < new.occupied_end
-  │          AND existing.occupied_end > new.occupied_start
-  └─ 重複あり → ConflictError を raise（DB 保存なし）
-
-AssignmentService.confirm_vehicle_assignment(operation, vehicle, driver_user=None, is_external_driver=False)
-  ├─ vehicle.is_external == True → チェックをスキップ（外注車輌は複数工程割当が前提）
-  ├─ operation.scheduled_start/end が None → チェックをスキップ（確定時間未設定）
-  ├─ select_for_update() で対象車輌の割当レコードを行ロック
-  └─ 重複あり → ConflictError を raise
 ```
 
 ---

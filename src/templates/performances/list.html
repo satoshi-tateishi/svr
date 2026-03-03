@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}公演一覧 | svr{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">公演一覧</h1>
+  <a href="{% url 'performances:create' %}"
+     class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 text-sm font-medium">
+    ＋ 公演を追加
+  </a>
+</div>
+
+{% if performances %}
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">公演タイトル</th>
+          <th class="px-4 py-3 text-left">開始日</th>
+          <th class="px-4 py-3 text-left">終了日</th>
+          <th class="px-4 py-3 text-center">工程</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for p in performances %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <a href="{% url 'performances:detail' p.pk %}" class="text-indigo-600 hover:underline font-medium">
+              {{ p.title }}
+            </a>
+          </td>
+          <td class="px-4 py-3 text-gray-600">{{ p.start_date }}</td>
+          <td class="px-4 py-3 text-gray-600">{{ p.end_date }}</td>
+          <td class="px-4 py-3 text-center">
+            {% if p.has_phases %}
+              <span class="text-green-600 font-medium">展開済</span>
+            {% else %}
+              <span class="text-gray-400">未展開</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="text-center py-16 text-gray-400">
+    <p class="text-lg">公演がまだ登録されていません。</p>
+    <a href="{% url 'performances:create' %}" class="mt-4 inline-block text-indigo-600 hover:underline">
+      最初の公演を追加する →
+    </a>
+  </div>
+{% endif %}
+{% endblock %}

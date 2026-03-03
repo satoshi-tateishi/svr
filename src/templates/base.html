@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}svr 公演手配管理{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+<nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+  <a href="{% url 'performances:list' %}" class="font-bold text-lg text-indigo-700">svr 公演手配</a>
+  <div class="flex items-center gap-4 text-sm">
+    {% if user.is_authenticated %}
+      <span class="text-gray-500">{{ user.get_full_name|default:user.username }}</span>
+      <form method="post" action="{% url 'accounts:logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="text-gray-500 hover:text-red-600">ログアウト</button>
+      </form>
+    {% endif %}
+  </div>
+</nav>
+
+<main class="max-w-5xl mx-auto px-4 py-8">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="mb-4 px-4 py-3 rounded bg-yellow-100 text-yellow-800 border border-yellow-300">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</main>
+
+</body>
+</html>

@@ -44,8 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Local apps
     'apps.accounts',
-    # 業務アプリ（別フェーズで追加）
-    # 'apps.performances',
+    'apps.performances',
 ]
 
 MIDDLEWARE = [

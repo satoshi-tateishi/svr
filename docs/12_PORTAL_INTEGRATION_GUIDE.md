@@ -15,7 +15,7 @@
 | Week 2 | コアモデル・サービス層・テンプレート展開 | ✅ 完了 |
 | Week 3 | ダブルブッキング防止（AssignmentService） | ✅ 完了 |
 | Week 4 | 単価・原価管理 + 乖離分析 | ✅ 完了 |
-| Week 5 | LockService + スナップショット確定 | 未着手 |
+| Week 5 | LockService + スナップショット確定 | ✅ 完了 |
 | Week 6 | PDF 帳票出力 | 未着手 |
 | Week 7 | UI ブラッシュアップ + ダッシュボード | 未着手 |
 | Week 8 | 本番デプロイ + SaaS 連携（freee/board） | 未着手 |
@@ -100,6 +100,39 @@ AssignmentService.confirm_vehicle_assignment(operation, vehicle, driver_user=Non
   └─ 重複あり → ConflictError を raise
 ```
 
+### Week 5 — LockService + スナップショット確定
+
+| ファイル | 内容 |
+|---------|------|
+| `src/apps/performances/exceptions.py` | `ZeroCostWarning`（外注原価 0 円警告用カスタム例外）を追加 |
+| `src/apps/performances/services/lock_service.py` | **最重要** `lock_phase_slot()` / `lock_vehicle_operation()` |
+| `src/apps/performances/tests/test_lock_service.py` | **新規** TC-SNAP-06/07 + 追加ケース（15 テスト全 PASSED） |
+
+#### Week 5 で実装した仕様メモ
+
+```
+LockService.lock_phase_slot(slot)
+  ├─ @transaction.atomic + select_for_update() で PhaseSlot を行ロック
+  ├─ status == LOCKED → ValidationError（再 Lock 禁止）
+  ├─ 各 StaffAssignment に FreelanceRateService.get_applicable_rate() で単価取得
+  │    ├─ applied_unit_price = rate.unit_price
+  │    ├─ applied_allowance_total = rate.allowance
+  │    ├─ applied_total_amount = rate.unit_price + rate.allowance
+  │    ├─ applied_position_name = assignment.position.name
+  │    └─ 単価未登録・ポジション未設定 → 0 円でスナップショット
+  ├─ StaffAssignment.locked_at = now
+  └─ PhaseSlot.status = LOCKED
+
+LockService.lock_vehicle_operation(operation, force=False)
+  ├─ @transaction.atomic + select_for_update() で VehicleOperation を行ロック
+  ├─ status == LOCKED → ValidationError（再 Lock 禁止）
+  ├─ force=False の場合: 外注車輌の applied_cost_amount が None or 0 → ZeroCostWarning
+  │    └─ force=True を指定して再実行すれば 0 円で強制確定可能
+  ├─ applied_cost_amount が None → 0 で確定保存
+  ├─ VehicleAssignment.locked_at = now
+  └─ VehicleOperation.status = LOCKED
+```
+
 ### Week 4 — 単価・原価管理 + 乖離分析（DashboardQueryService）
 
 | ファイル | 内容 |
@@ -132,34 +165,24 @@ DashboardQueryService.get_unlocked_past_slots()
 
 ---
 
-## Week 5 で実装するもの（次回作業）
+## Week 6 で実装するもの（次回作業）
 
-### 目標：LockService + スナップショット確定
+### 目標：PDF 帳票出力
 
 ```
-Step 1: LockService（新規）
-  ├─ lock_phase_slot(slot): PhaseSlot を Locked に遷移し、スタッフ単価をスナップショット保存
-  │    ├─ FreelanceRateService.get_applicable_rate() で単価取得
-  │    ├─ applied_unit_price / applied_allowance_total / applied_total_amount を StaffAssignment に保存
-  │    └─ PhaseSlot.status = LOCKED、locked_at を設定
-  └─ lock_vehicle_operation(operation): VehicleOperation を Locked に遷移し、原価をスナップショット保存
-       ├─ VehicleAssignment.applied_cost_amount / applied_sales_amount を保存
-       └─ VehicleOperation.status = LOCKED、locked_at を設定
+Step 1: ReportService（新規）
+  └─ generate_performance_report(performance): Lock 済みスナップショットから PDF を生成
 
-Step 2: AuditLogService（新規）
-  └─ TC-LOG-07 の「時間乖離承認ログ」等を記録
-
-Step 3: テスト
-  ├─ TC-SNAP-06: 人員・配車同時 Lock → スナップショット確認
-  └─ TC-SNAP-07: 外注原価 0 円の警告検知
+Step 2: テスト
+  └─ PDF に applied_* フィールドが正しく反映されること
 ```
 
-### 参照ドキュメント（Week 5 用）
+### 参照ドキュメント（Week 6 用）
 
 | ドキュメント | 内容 |
 |------------|------|
-| `docs/03_SERVICE_LAYER_v4.md` | LockService の設計仕様（4章） |
-| `docs/09_TEST_CASE_DESIGN_v3.md` | TC-SNAP-06/07、TC-LOG-07 |
+| `docs/03_SERVICE_LAYER_v4.md` | 全体設計 |
+| `docs/10_IMPLEMENTATION_ROADMAP_8WEEKS_v4.md` | Week 6 のロードマップ |
 
 ---
 
@@ -246,6 +269,17 @@ docker run --rm \
 ```
 
 ---
+
+## 動作確認チェックリスト（Week 5 完了後）
+
+```
+✅ pytest で全 61 テストが green であること（Week 5 で 15 テスト追加）
+✅ LockService.lock_phase_slot() が StaffAssignment に applied_* スナップショットを保存すること
+✅ LockService.lock_vehicle_operation() が VehicleAssignment に applied_cost_amount を保存すること
+✅ 外注原価 0 円で force=False → ZeroCostWarning が raise されること
+✅ force=True で 0 円のまま Lock できること
+✅ 既 Lock 済みへの再 Lock → ValidationError が raise されること
+```
 
 ## 動作確認チェックリスト（Week 4 完了後）
 

@@ -16,5 +16,5 @@ quote-style = "single"
 indent-style = "space"
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings"
+DJANGO_SETTINGS_MODULE = "config.settings_test"
 pythonpath = ["src"]

@@ -82,6 +82,26 @@ class FreelanceRateService:
         )
 
     @staticmethod
+    def get_applicable_rate(
+        user: User,
+        performance: Performance,
+        position: PerformancePosition,
+        target_date: date,
+    ) -> 'PerformanceFreelanceRate | None':
+        """
+        指定日に有効な単価を返す（設計仕様の引数順序に準拠）。
+
+        LockService からの呼び出しを想定した公開インターフェース。
+        内部実装は get_active_rate() に委譲する。
+        """
+        return FreelanceRateService.get_active_rate(
+            performance=performance,
+            user=user,
+            position=position,
+            target_date=target_date,
+        )
+
+    @staticmethod
     def _check_overlap(
         performance: Performance,
         user: User,
@@ -103,12 +123,12 @@ class FreelanceRateService:
 
             # 終了日が None（無期限）は「遠い将来」として扱う
             # 重複条件: new_start <= existing_end AND existing_start <= new_end
-            overlap = (
-                (existing_end is None or valid_from <= existing_end)
-                and (new_end is None or rate.valid_from <= new_end)
+            overlap = (existing_end is None or valid_from <= existing_end) and (
+                new_end is None or rate.valid_from <= new_end
             )
             if overlap:
+                until_label = existing_end or '無期限'
                 raise ValidationError(
-                    f'単価の期間が既存の登録（{rate.valid_from}〜{existing_end or "無期限"}）と重複しています。'
+                    f'単価の期間が既存の登録（{rate.valid_from}〜{until_label}）と重複しています。'
                     '既存の単価に適用終了日を設定してから再登録してください。'
                 )

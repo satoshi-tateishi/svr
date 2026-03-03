@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.performances.models.base import Performance
-from apps.performances.models.vehicle import Vehicle, VehicleOperation
+from apps.performances.models.vehicle import Vehicle, VehicleAssignment, VehicleOperation
 
 
 class VehicleService:
@@ -86,3 +86,25 @@ class VehicleService:
         operation.status = VehicleOperation.Status.ASSIGNED
         operation.save(update_fields=['scheduled_start', 'scheduled_end', 'status', 'updated_at'])
         return operation
+
+    @staticmethod
+    @transaction.atomic
+    def finalize_vehicle_cost(assignment: VehicleAssignment, amount: int) -> VehicleAssignment:
+        """
+        外注車輌の確定原価を手動入力する（Lock 直前の最終確認用）。
+
+        Args:
+            assignment: 配車割当レコード
+            amount: 確定原価（円、0以上）
+
+        Raises:
+            ValidationError: 割当が確定済み（Locked）の場合、または金額が負の場合
+        """
+        if assignment.is_locked:
+            raise ValidationError('確定済みの配車割当は変更できません。')
+        if amount < 0:
+            raise ValidationError('原価は 0 以上の値を入力してください。')
+
+        assignment.applied_cost_amount = amount
+        assignment.save(update_fields=['applied_cost_amount'])
+        return assignment

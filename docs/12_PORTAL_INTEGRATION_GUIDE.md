@@ -14,7 +14,7 @@
 | Week 1 | JWT 連携層・Docker 基盤構築 | ✅ 完了 |
 | Week 2 | コアモデル・サービス層・テンプレート展開 | ✅ 完了 |
 | Week 3 | ダブルブッキング防止（AssignmentService） | ✅ 完了 |
-| Week 4 | 単価・原価管理 + 乖離分析 | 🔜 次回 |
+| Week 4 | 単価・原価管理 + 乖離分析 | ✅ 完了 |
 | Week 5 | LockService + スナップショット確定 | 未着手 |
 | Week 6 | PDF 帳票出力 | 未着手 |
 | Week 7 | UI ブラッシュアップ + ダッシュボード | 未着手 |
@@ -57,6 +57,36 @@
 | `src/templates/performances/*.html` | Tailwind CSS UI（一覧・作成・詳細） |
 | `src/apps/performances/tests/test_phase_service.py` | PhaseService テスト 9 ケース |
 | `src/apps/performances/tests/test_models.py` | モデルテスト |
+
+### Week 4 — 単価・原価管理 + 乖離分析（DashboardQueryService）
+
+| ファイル | 内容 |
+|---------|------|
+| `src/apps/performances/services/freelance_rate_service.py` | `get_applicable_rate()` を追加（LockService 向け公開 API） |
+| `src/apps/performances/services/vehicle_service.py` | `finalize_vehicle_cost(assignment, amount)` を追加 |
+| `src/apps/performances/services/dashboard_query_service.py` | **新規** 乖離分析クエリ（人員不足・時間乖離・Lock 漏れ） |
+| `src/apps/performances/tests/test_dashboard_query_service.py` | **新規** TC-GAP-01/02 + Lock 漏れ検出テスト（14 ケース） |
+
+#### Week 4 で実装した仕様メモ
+
+```
+FreelanceRateService.get_applicable_rate(user, performance, position, target_date)
+  └─ get_active_rate() への引数順序ラッパー（設計仕様準拠）
+
+VehicleService.finalize_vehicle_cost(assignment, amount)
+  ├─ assignment.is_locked == True → ValidationError
+  ├─ amount < 0 → ValidationError
+  └─ VehicleAssignment.applied_cost_amount = amount を保存
+
+DashboardQueryService.get_staffing_shortages()
+  └─ Count('assignments') アノテーション → actual_count < requested_staff_count でフィルタ
+
+DashboardQueryService.get_schedule_drifts(threshold_minutes=30)
+  └─ Q(scheduled_start >= requested_start + Δ) | Q(scheduled_start <= requested_start - Δ)
+
+DashboardQueryService.get_unlocked_past_slots()
+  └─ phase__suggested_date < today かつ status != LOCKED
+```
 
 ### Week 3 — ダブルブッキング防止（AssignmentService）
 
@@ -102,44 +132,34 @@ AssignmentService.confirm_vehicle_assignment(operation, vehicle, driver_user=Non
 
 ---
 
-## Week 4 で実装するもの（次回作業）
+## Week 5 で実装するもの（次回作業）
 
-### 目標：単価・原価の管理と「希望 vs 確定」の乖離を算出する
+### 目標：LockService + スナップショット確定
 
 ```
-Step 1: FreelanceRateService の拡張
-  ├─ get_applicable_rate(user, performance, position, target_date): 指定日に有効な単価を取得
-  └─ 期間重複チェックは既存実装済み（FreelanceRateService）
+Step 1: LockService（新規）
+  ├─ lock_phase_slot(slot): PhaseSlot を Locked に遷移し、スタッフ単価をスナップショット保存
+  │    ├─ FreelanceRateService.get_applicable_rate() で単価取得
+  │    ├─ applied_unit_price / applied_allowance_total / applied_total_amount を StaffAssignment に保存
+  │    └─ PhaseSlot.status = LOCKED、locked_at を設定
+  └─ lock_vehicle_operation(operation): VehicleOperation を Locked に遷移し、原価をスナップショット保存
+       ├─ VehicleAssignment.applied_cost_amount / applied_sales_amount を保存
+       └─ VehicleOperation.status = LOCKED、locked_at を設定
 
-Step 2: VehicleService.finalize_vehicle_cost(assignment, amount)
-  └─ 外注車輌の確定原価を手動入力（Lock 前の最終確認用）
+Step 2: AuditLogService（新規）
+  └─ TC-LOG-07 の「時間乖離承認ログ」等を記録
 
-Step 3: DashboardQueryService
-  ├─ get_staffing_shortages(): requested_staff_count > actual_staff_count のスロット一覧
-  ├─ get_schedule_drifts(): 希望開始と確定開始が 30 分以上乖離している工程一覧
-  └─ get_unlocked_past_slots(): 日時超過だが Locked になっていないスロット一覧
+Step 3: テスト
+  ├─ TC-SNAP-06: 人員・配車同時 Lock → スナップショット確認
+  └─ TC-SNAP-07: 外注原価 0 円の警告検知
 ```
 
-### 新規作成予定ファイル
-
-| ファイル | 内容 |
-|---------|------|
-| `src/apps/performances/services/dashboard_query_service.py` | 乖離分析・不足警告クエリ |
-| `src/apps/performances/tests/test_dashboard_query_service.py` | TC-GAP-01/02 等を網羅 |
-
-### 拡張予定ファイル
-
-| ファイル | 追加内容 |
-|---------|----------|
-| `src/apps/performances/services/freelance_rate_service.py` | `get_applicable_rate()` の実装 |
-| `src/apps/performances/services/vehicle_service.py` | `finalize_vehicle_cost()` の実装 |
-
-### 参照ドキュメント
+### 参照ドキュメント（Week 5 用）
 
 | ドキュメント | 内容 |
 |------------|------|
-| `docs/03_SERVICE_LAYER_v4.md` | DashboardQueryService・VehicleService の設計仕様 |
-| `docs/09_TEST_CASE_DESIGN_v3.md` | TC-GAP-01（人員不足）・TC-GAP-02（時間乖離）のテストケース |
+| `docs/03_SERVICE_LAYER_v4.md` | LockService の設計仕様（4章） |
+| `docs/09_TEST_CASE_DESIGN_v3.md` | TC-SNAP-06/07、TC-LOG-07 |
 
 ---
 
@@ -227,13 +247,24 @@ docker run --rm \
 
 ---
 
+## 動作確認チェックリスト（Week 4 完了後）
+
+```
+✅ pytest で全 46 テストが green であること（Week 4 で 14 テスト追加）
+✅ FreelanceRateService.get_applicable_rate() が LockService 向けに呼び出せること
+✅ VehicleService.finalize_vehicle_cost() が Locked 済み割当で ValidationError を raise すること
+✅ DashboardQueryService.get_staffing_shortages() が人員不足スロットを正しく返すこと
+✅ DashboardQueryService.get_schedule_drifts() が 30 分以上乖離の工程を検出すること
+✅ DashboardQueryService.get_unlocked_past_slots() が Lock 漏れ項目を検出すること
+```
+
 ## 動作確認チェックリスト（Week 3 完了後）
 
 ```
-□ pytest で全 32 テストが green であること
-□ ConflictError が performances.exceptions からインポートできること
-□ AssignmentService.confirm_staff_assignment() が重複時に ConflictError を raise すること
-□ AssignmentService.confirm_vehicle_assignment() が外注車輌を重複判定から除外すること
+✅ pytest で全 32 テストが green であること
+✅ ConflictError が performances.exceptions からインポートできること
+✅ AssignmentService.confirm_staff_assignment() が重複時に ConflictError を raise すること
+✅ AssignmentService.confirm_vehicle_assignment() が外注車輌を重複判定から除外すること
 ```
 
 ---

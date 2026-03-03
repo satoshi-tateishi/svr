@@ -1,0 +1,60 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: svr_db
+    restart: always
+    command: >
+      --innodb-buffer-pool-size=1G
+      --innodb-log-file-size=256M
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      - "3310:3306"
+    volumes:
+      - svr_mysql_data:/var/lib/mysql
+    networks:
+      - svr_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: svr_redis
+    restart: always
+    networks:
+      - svr_network
+
+  web:
+    build: .
+    container_name: svr_web
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8085:8000"  # rf_finder が 8084 を使用しているため 8085 を使用
+    volumes:
+      - ./src:/app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy  # MySQL 起動完了を待ってから起動
+    networks:
+      - svr_network
+      - shin-on-internal  # portal-app:8000 への JWKS 通信用
+
+networks:
+  svr_network:
+    driver: bridge
+  shin-on-internal:
+    external: true  # docker network create shin-on-internal で事前作成が必要
+
+volumes:
+  svr_mysql_data:

@@ -22,6 +22,20 @@
 
 ---
 
+## svr 固有の設定値
+
+| 項目 | 値 |
+|-----|---|
+| コンテナ名（web） | `svr_web` |
+| 開発ポート | `8085`（rf_finder が 8084 を使用中） |
+| DB コンテナ名 | `svr_db` |
+| DB 開発ポート | `3310` |
+| Docker ネットワーク | `svr_network`（内部）+ `shin-on-internal`（Portal 通信用） |
+| GitHub リポジトリ | `https://github.com/satoshi-tateishi/svr` |
+| デプロイブランチ | `release` |
+
+---
+
 ## 実装済みファイル一覧
 
 ### Week 1 — JWT 連携層・基盤
@@ -115,20 +129,6 @@ DashboardQueryService.get_schedule_drifts(threshold_minutes=30)
 DashboardQueryService.get_unlocked_past_slots()
   └─ phase__suggested_date < today かつ status != LOCKED
 ```
-
----
-
-## svr 固有の設定値
-
-| 項目 | 値 |
-|-----|---|
-| コンテナ名（web） | `svr_web` |
-| 開発ポート | `8085`（rf_finder が 8084 を使用中） |
-| DB コンテナ名 | `svr_db` |
-| DB 開発ポート | `3310` |
-| Docker ネットワーク | `svr_network`（内部）+ `shin-on-internal`（Portal 通信用） |
-| GitHub リポジトリ | `https://github.com/satoshi-tateishi/svr` |
-| デプロイブランチ | `release` |
 
 ---
 

@@ -100,6 +100,36 @@ AssignmentService.confirm_vehicle_assignment(operation, vehicle, driver_user=Non
   └─ 重複あり → ConflictError を raise
 ```
 
+### Week 4 — 単価・原価管理 + 乖離分析（DashboardQueryService）
+
+| ファイル | 内容 |
+|---------|------|
+| `src/apps/performances/services/freelance_rate_service.py` | `get_applicable_rate()` を追加（LockService 向け公開 API） |
+| `src/apps/performances/services/vehicle_service.py` | `finalize_vehicle_cost(assignment, amount)` を追加 |
+| `src/apps/performances/services/dashboard_query_service.py` | **新規** 乖離分析クエリ（人員不足・時間乖離・Lock 漏れ） |
+| `src/apps/performances/tests/test_dashboard_query_service.py` | **新規** TC-GAP-01/02 + Lock 漏れ検出テスト（14 ケース） |
+
+#### Week 4 で実装した仕様メモ
+
+```
+FreelanceRateService.get_applicable_rate(user, performance, position, target_date)
+  └─ get_active_rate() への引数順序ラッパー（設計仕様準拠）
+
+VehicleService.finalize_vehicle_cost(assignment, amount)
+  ├─ assignment.is_locked == True → ValidationError
+  ├─ amount < 0 → ValidationError
+  └─ VehicleAssignment.applied_cost_amount = amount を保存
+
+DashboardQueryService.get_staffing_shortages()
+  └─ Count('assignments') アノテーション → actual_count < requested_staff_count でフィルタ
+
+DashboardQueryService.get_schedule_drifts(threshold_minutes=30)
+  └─ Q(scheduled_start >= requested_start + Δ) | Q(scheduled_start <= requested_start - Δ)
+
+DashboardQueryService.get_unlocked_past_slots()
+  └─ phase__suggested_date < today かつ status != LOCKED
+```
+
 ### Week 5 — LockService + スナップショット確定
 
 | ファイル | 内容 |
@@ -131,36 +161,6 @@ LockService.lock_vehicle_operation(operation, force=False)
   ├─ applied_cost_amount が None → 0 で確定保存
   ├─ VehicleAssignment.locked_at = now
   └─ VehicleOperation.status = LOCKED
-```
-
-### Week 4 — 単価・原価管理 + 乖離分析（DashboardQueryService）
-
-| ファイル | 内容 |
-|---------|------|
-| `src/apps/performances/services/freelance_rate_service.py` | `get_applicable_rate()` を追加（LockService 向け公開 API） |
-| `src/apps/performances/services/vehicle_service.py` | `finalize_vehicle_cost(assignment, amount)` を追加 |
-| `src/apps/performances/services/dashboard_query_service.py` | **新規** 乖離分析クエリ（人員不足・時間乖離・Lock 漏れ） |
-| `src/apps/performances/tests/test_dashboard_query_service.py` | **新規** TC-GAP-01/02 + Lock 漏れ検出テスト（14 ケース） |
-
-#### Week 4 で実装した仕様メモ
-
-```
-FreelanceRateService.get_applicable_rate(user, performance, position, target_date)
-  └─ get_active_rate() への引数順序ラッパー（設計仕様準拠）
-
-VehicleService.finalize_vehicle_cost(assignment, amount)
-  ├─ assignment.is_locked == True → ValidationError
-  ├─ amount < 0 → ValidationError
-  └─ VehicleAssignment.applied_cost_amount = amount を保存
-
-DashboardQueryService.get_staffing_shortages()
-  └─ Count('assignments') アノテーション → actual_count < requested_staff_count でフィルタ
-
-DashboardQueryService.get_schedule_drifts(threshold_minutes=30)
-  └─ Q(scheduled_start >= requested_start + Δ) | Q(scheduled_start <= requested_start - Δ)
-
-DashboardQueryService.get_unlocked_past_slots()
-  └─ phase__suggested_date < today かつ status != LOCKED
 ```
 
 ---

@@ -13,8 +13,8 @@
 |---------|------|------|
 | Week 1 | JWT 連携層・Docker 基盤構築 | ✅ 完了 |
 | Week 2 | コアモデル・サービス層・テンプレート展開 | ✅ 完了 |
-| Week 3 | ダブルブッキング防止（AssignmentService） | 🔜 次回 |
-| Week 4 | 単価・原価管理 + 乖離分析 | 未着手 |
+| Week 3 | ダブルブッキング防止（AssignmentService） | ✅ 完了 |
+| Week 4 | 単価・原価管理 + 乖離分析 | 🔜 次回 |
 | Week 5 | LockService + スナップショット確定 | 未着手 |
 | Week 6 | PDF 帳票出力 | 未着手 |
 | Week 7 | UI ブラッシュアップ + ダッシュボード | 未着手 |
@@ -58,6 +58,34 @@
 | `src/apps/performances/tests/test_phase_service.py` | PhaseService テスト 9 ケース |
 | `src/apps/performances/tests/test_models.py` | モデルテスト |
 
+### Week 3 — ダブルブッキング防止（AssignmentService）
+
+| ファイル | 内容 |
+|---------|------|
+| `src/apps/performances/exceptions.py` | `ConflictError`（ダブルブッキング用カスタム例外） |
+| `src/apps/performances/services/assignment_service.py` | **最重要** 重複チェック付き人員・車輌割当 |
+| `src/apps/performances/tests/test_assignment_service.py` | 重複チェックのテスト 12 ケース（全 PASSED） |
+| `src/config/settings_test.py` | テスト用設定（インメモリ SQLite・LocMemCache） |
+| `requirements.txt` | pytest / pytest-django を追加 |
+| `pyproject.toml` | `DJANGO_SETTINGS_MODULE` を `config.settings_test` に変更 |
+
+#### Week 3 で実装した仕様メモ
+
+```
+AssignmentService.confirm_staff_assignment(slot, user, occupied_start, occupied_end, position=None)
+  ├─ select_for_update() で対象スタッフの割当レコードを行ロック
+  ├─ 半開区間 [occupied_start, occupied_end) で重複チェック
+  │    条件: existing.occupied_start < new.occupied_end
+  │          AND existing.occupied_end > new.occupied_start
+  └─ 重複あり → ConflictError を raise（DB 保存なし）
+
+AssignmentService.confirm_vehicle_assignment(operation, vehicle, driver_user=None, is_external_driver=False)
+  ├─ vehicle.is_external == True → チェックをスキップ（外注車輌は複数工程割当が前提）
+  ├─ operation.scheduled_start/end が None → チェックをスキップ（確定時間未設定）
+  ├─ select_for_update() で対象車輌の割当レコードを行ロック
+  └─ 重複あり → ConflictError を raise
+```
+
 ---
 
 ## svr 固有の設定値
@@ -74,41 +102,83 @@
 
 ---
 
-## Week 3 で実装するもの（次回作業）
+## Week 4 で実装するもの（次回作業）
 
-### 目標：ダブルブッキングを物理的に遮断する
+### 目標：単価・原価の管理と「希望 vs 確定」の乖離を算出する
 
 ```
-Step 1: AssignmentService.confirm_staff_assignment()
-  ├─ 対象スタッフの全 StaffAssignment を取得
-  ├─ 占有時間（occupied_start〜occupied_end）が重複するものを検索
-  └─ 重複があれば ConflictError を raise（DB には保存しない）
+Step 1: FreelanceRateService の拡張
+  ├─ get_applicable_rate(user, performance, position, target_date): 指定日に有効な単価を取得
+  └─ 期間重複チェックは既存実装済み（FreelanceRateService）
 
-Step 2: AssignmentService.confirm_vehicle_assignment()
-  ├─ 対象車輌の全 VehicleAssignment を取得
-  ├─ scheduled_start〜scheduled_end が重複するものを検索
-  ├─ 外注車輌（Vehicle.ownership_type == 'external'）は重複判定から除外
-  └─ 重複があれば ConflictError を raise
+Step 2: VehicleService.finalize_vehicle_cost(assignment, amount)
+  └─ 外注車輌の確定原価を手動入力（Lock 前の最終確認用）
 
-Step 3: select_for_update() によるトランザクション制御
-  └─ 並行アクセス時の競合を防ぐため、DB ロックを取得してから判定
+Step 3: DashboardQueryService
+  ├─ get_staffing_shortages(): requested_staff_count > actual_staff_count のスロット一覧
+  ├─ get_schedule_drifts(): 希望開始と確定開始が 30 分以上乖離している工程一覧
+  └─ get_unlocked_past_slots(): 日時超過だが Locked になっていないスロット一覧
 ```
 
-### 新規作成ファイル
+### 新規作成予定ファイル
 
 | ファイル | 内容 |
 |---------|------|
-| `src/apps/performances/services/assignment_service.py` | **最重要** 重複チェック付き人員・車輌割当 |
-| `src/apps/performances/exceptions.py` | `ConflictError`（ダブルブッキング用カスタム例外） |
-| `src/apps/performances/tests/test_assignment_service.py` | 重複チェックのテスト |
+| `src/apps/performances/services/dashboard_query_service.py` | 乖離分析・不足警告クエリ |
+| `src/apps/performances/tests/test_dashboard_query_service.py` | TC-GAP-01/02 等を網羅 |
+
+### 拡張予定ファイル
+
+| ファイル | 追加内容 |
+|---------|----------|
+| `src/apps/performances/services/freelance_rate_service.py` | `get_applicable_rate()` の実装 |
+| `src/apps/performances/services/vehicle_service.py` | `finalize_vehicle_cost()` の実装 |
 
 ### 参照ドキュメント
 
 | ドキュメント | 内容 |
 |------------|------|
-| `docs/01_REQUIREMENTS_v7.md` | ダブルブッキング防止の要件定義 |
-| `docs/03_SERVICE_LAYER_v4.md` | AssignmentService の設計仕様 |
-| `docs/09_TEST_CASE_DESIGN_v3.md` | TC-VH-03（車輌重複拒否）等のテストケース |
+| `docs/03_SERVICE_LAYER_v4.md` | DashboardQueryService・VehicleService の設計仕様 |
+| `docs/09_TEST_CASE_DESIGN_v3.md` | TC-GAP-01（人員不足）・TC-GAP-02（時間乖離）のテストケース |
+
+---
+
+## テストの実行方法
+
+### 通常のテスト実行（web コンテナ起動済みの場合）
+
+```bash
+docker compose exec web python -m pytest apps/performances/tests/ -v
+```
+
+### web コンテナが停止している場合（推奨）
+
+manage.py が存在しないため `docker compose exec` は使えない。
+`docker run` で直接 pytest を実行する:
+
+```bash
+docker run --rm \
+  --network svr_svr_network \
+  -e DJANGO_SETTINGS_MODULE=config.settings_test \
+  -e SECRET_KEY=test-secret-key-pytest-only \
+  -e DEBUG=True \
+  -e DATABASE_URL=sqlite://:memory: \
+  -v /Users/satoshi/svr/src:/app \
+  -v /Users/satoshi/svr/pyproject.toml:/pyproject.toml \
+  -w /app \
+  svr_web \
+  python -m pytest apps/performances/tests/ -v
+```
+
+**注意**: `DJANGO_SETTINGS_MODULE` を環境変数で明示しないと、
+Dockerfile の `ENV DJANGO_SETTINGS_MODULE=config.settings` が優先されて MySQL に接続しようとする。
+
+### イメージ再ビルドが必要な場合
+
+```bash
+cd /Users/satoshi/svr
+docker compose build web
+```
 
 ---
 
@@ -140,36 +210,30 @@ grep PORTAL_ALLOWED_REDIRECT_HOSTS /Users/satoshi/shin-on_portal/portal-app/.env
 # → ["localhost"] が含まれていれば OK
 ```
 
-### 4. Django プロジェクトのスキャフォールド（未実施の場合）
-
-```bash
-# manage.py と wsgi.py が存在しない場合のみ実行
-docker compose run --rm web django-admin startproject config_tmp .
-# ※ config/ は既に存在するため startproject は使わず手動で manage.py / wsgi.py を作成
-```
-
-### 5. マイグレーションと起動
+### 4. マイグレーションと起動
 
 ```bash
 docker compose up -d
-docker compose exec web python manage.py makemigrations accounts performances
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser
+# manage.py は src/ に存在しない（runserver は起動しないが DB・Redis は正常起動する）
+# マイグレーションは docker run で実行:
+docker run --rm \
+  --network svr_svr_network \
+  --env-file /Users/satoshi/svr/.env \
+  -v /Users/satoshi/svr/src:/app \
+  -w /app \
+  svr_web \
+  python -c "import django; django.setup(); from django.core.management import call_command; call_command('migrate')"
 ```
 
 ---
 
-## 動作確認チェックリスト（Week 1 + 2 完了後）
+## 動作確認チェックリスト（Week 3 完了後）
 
 ```
-□ http://localhost:8085/ にアクセス → ポータルログインへリダイレクト
-□ SSO + OTP 認証完了 → /performances/ に戻り一覧が表示される
-□ /performances/create/ で公演を作成できる
-□ 詳細画面の「9工程を一括展開」ボタンを押すと 1〜9 工程が生成される
-□ 2回目の展開ボタンでエラーメッセージが表示される（冪等性ガード）
-□ /admin/accounts/userprofile/ に UserProfile が自動作成されている
-□ /admin/performances/vehicle/ で車輌マスタを登録できる
-□ pytest で全テストが green であること
+□ pytest で全 32 テストが green であること
+□ ConflictError が performances.exceptions からインポートできること
+□ AssignmentService.confirm_staff_assignment() が重複時に ConflictError を raise すること
+□ AssignmentService.confirm_vehicle_assignment() が外注車輌を重複判定から除外すること
 ```
 
 ---
@@ -245,11 +309,23 @@ ruff check src/ --fix && ruff format src/
 docker compose exec web ruff check .
 ```
 
-### テストは Docker コンテナ内で実行する
+### テストは DJANGO_SETTINGS_MODULE を明示して実行する
+
+Dockerfile に `ENV DJANGO_SETTINGS_MODULE=config.settings` が設定されているため、
+テスト実行時は環境変数で明示的に上書きしないと MySQL 接続を試みてしまう。
 
 ```bash
-docker compose exec web python -m pytest apps/performances/tests/ -v
+# ✅ 正しい（-e で settings_test を指定）
+docker run --rm ... -e DJANGO_SETTINGS_MODULE=config.settings_test ... svr_web python -m pytest ...
+
+# ❌ 間違い（Dockerfile の ENV が優先されて MySQL に接続しようとする）
+docker run --rm ... svr_web python -m pytest ...
 ```
+
+### manage.py が存在しない（Week 3 時点の既知事項）
+
+`src/` に `manage.py` が未作成のため `docker compose exec web python manage.py` は使えない。
+テスト・マイグレーション等は `docker run` コマンドで直接実行する（テストの実行方法セクション参照）。
 
 ---
 

@@ -1,13 +1,15 @@
 import logging
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseBadRequest
+from django.core.exceptions import ValidationError
+from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .models import Performance
 from .services.performance_service import PerformanceService
 from .services.phase_service import PhaseService
+from .services.report_service import ReportService
 
 logger = logging.getLogger(__name__)
 
@@ -95,3 +97,35 @@ def apply_template(request, pk):
         )
 
     return redirect('performances:detail', pk=performance.pk)
+
+
+@login_required(login_url='accounts:login')
+def performance_report_pdf(request, pk):
+    """公演手配書 PDF ダウンロード（現場スタッフ・ドライバー配布用）"""
+    performance = get_object_or_404(Performance, pk=pk)
+
+    try:
+        pdf_bytes = ReportService.generate_performance_report(performance)
+    except ValidationError as e:
+        return HttpResponseBadRequest(str(e))
+
+    filename = f'performance_report_{performance.pk}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required(login_url='accounts:login')
+def financial_report_pdf(request, pk):
+    """手配実績証明書 PDF ダウンロード（経理提出・PDF 保存用）"""
+    performance = get_object_or_404(Performance, pk=pk)
+
+    try:
+        pdf_bytes = ReportService.generate_financial_report(performance)
+    except ValidationError as e:
+        return HttpResponseBadRequest(str(e))
+
+    filename = f'financial_report_{performance.pk}.pdf'
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response

@@ -4,9 +4,9 @@ PhaseService のユニットテスト（最重要）
 テンプレート展開の正確性・冪等性を検証する。
 """
 
-import pytest
 from datetime import date
 
+import pytest
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 

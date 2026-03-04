@@ -2,15 +2,16 @@
 パフォーマンスモデルのユニットテスト
 """
 
+from datetime import UTC, date, datetime
+
 import pytest
-from datetime import date, datetime, timezone
 from django.contrib.auth.models import User
 
 from apps.performances.models import (
     Performance,
+    PerformancePosition,
     Phase,
     PhaseSlot,
-    PerformancePosition,
     StaffAssignment,
     Vehicle,
     VehicleOperation,
@@ -63,8 +64,8 @@ class TestPhaseSlot:
         performance = phase_slot.phase.performance
         position = PerformancePosition.objects.create(performance=performance, name='テック')
 
-        now = datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
-        end = datetime(2026, 6, 1, 18, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 6, 1, 9, 0, tzinfo=UTC)
+        end = datetime(2026, 6, 1, 18, 0, tzinfo=UTC)
 
         StaffAssignment.objects.create(
             phase_slot=phase_slot,
@@ -139,8 +140,8 @@ class TestVehicleOperation:
         op = VehicleOperation.objects.create(
             performance=performance,
             title='搬入',
-            requested_start=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
-            requested_end=datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc),
+            requested_start=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
+            requested_end=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
             route_from='倉庫',
             route_to='劇場',
         )
@@ -151,10 +152,10 @@ class TestVehicleOperation:
         op = VehicleOperation.objects.create(
             performance=performance,
             title='搬入',
-            requested_start=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
-            requested_end=datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc),
-            scheduled_start=datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc),
-            scheduled_end=datetime(2026, 6, 1, 13, 0, tzinfo=timezone.utc),
+            requested_start=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
+            requested_end=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
+            scheduled_start=datetime(2026, 6, 1, 9, 0, tzinfo=UTC),
+            scheduled_end=datetime(2026, 6, 1, 13, 0, tzinfo=UTC),
             route_from='倉庫',
             route_to='劇場',
         )

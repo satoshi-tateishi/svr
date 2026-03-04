@@ -22,6 +22,7 @@ db.sqlite3-journal
 # 環境変数（秘密情報は絶対にコミットしない）
 .env
 *.env
+.secret
 
 # 秘密鍵
 *.key

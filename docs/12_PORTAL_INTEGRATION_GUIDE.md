@@ -16,7 +16,7 @@
 | Week 3 | ダブルブッキング防止（AssignmentService） | ✅ 完了 |
 | Week 4 | 単価・原価管理 + 乖離分析 | ✅ 完了 |
 | Week 5 | LockService + スナップショット確定 | ✅ 完了 |
-| Week 6 | PDF 帳票出力 | 未着手 |
+| Week 6 | PDF 帳票出力 | ✅ 完了 |
 | Week 7 | UI ブラッシュアップ + ダッシュボード | 未着手 |
 | Week 8 | 本番デプロイ + SaaS 連携（freee/board） | 未着手 |
 
@@ -165,24 +165,70 @@ LockService.lock_vehicle_operation(operation, force=False)
 
 ---
 
-## Week 6 で実装するもの（次回作業）
+### Week 6 — PDF 帳票出力（ReportService）
 
-### 目標：PDF 帳票出力
+| ファイル | 内容 |
+|---------|------|
+| `src/apps/performances/services/report_service.py` | **最重要** Lock 済みスナップショットから PDF を生成 |
+| `src/templates/performances/reports/performance_report.html` | 公演手配書テンプレート（金額非表示） |
+| `src/templates/performances/reports/financial_report.html` | 手配実績証明書テンプレート（金額全表示） |
+| `src/apps/performances/views.py` | `performance_report_pdf()` / `financial_report_pdf()` を追加 |
+| `src/apps/performances/urls.py` | `report/performance/` / `report/financial/` エンドポイント |
+| `src/apps/performances/tests/test_report_service.py` | **新規** TC-PDF-01〜09（21 テスト全 PASSED） |
+| `requirements.txt` | `weasyprint>=62.0` を追加 |
+| `Dockerfile` | WeasyPrint 依存（libpango, libpangoft2, fontconfig, fonts-noto-cjk）を追加 |
+
+#### Week 6 で実装した仕様メモ
 
 ```
-Step 1: ReportService（新規）
-  └─ generate_performance_report(performance): Lock 済みスナップショットから PDF を生成
+ReportService.generate_performance_report(performance) -> bytes
+  ├─ Lock 済み PhaseSlot（status == LOCKED）のみを対象
+  ├─ Lock 済み VehicleOperation（status == LOCKED）のみを対象
+  ├─ Lock 済みデータが一切ない場合 → ValidationError を raise
+  ├─ 公演手配書テンプレート（金額情報なし）で HTML 生成
+  └─ WeasyPrint で PDF バイト列に変換
 
-Step 2: テスト
-  └─ PDF に applied_* フィールドが正しく反映されること
+ReportService.generate_financial_report(performance) -> bytes
+  ├─ 同上（Lock 済みデータのみ）
+  ├─ applied_* フィールドのみを参照（設計原則: SaaS 連携と同一）
+  ├─ total_staff_cost / total_vehicle_cost / grand_total を集計
+  └─ 手配実績証明書テンプレート（金額全表示）で PDF 生成
+
+内部ヘルパー:
+  _get_locked_staff_data(performance) -> list[dict]
+    └─ Lock 済み PhaseSlot → StaffAssignment の applied_* を辞書化
+  _get_locked_vehicle_data(performance) -> list[dict]
+    └─ Lock 済み VehicleOperation → VehicleAssignment の applied_cost_amount を辞書化
+
+PDF エンドポイント:
+  GET /performances/<pk>/report/performance/ → 公演手配書 PDF ダウンロード
+  GET /performances/<pk>/report/financial/  → 手配実績証明書 PDF ダウンロード
 ```
 
-### 参照ドキュメント（Week 6 用）
+---
+
+## Week 7 で実装するもの（次回作業）
+
+### 目標：UI ブラッシュアップ + 乖離ダッシュボード
+
+```
+Step 1: Dashboard ビュー
+  └─ DashboardQueryService の結果を一覧表示（人員不足・時間乖離・Lock 漏れ）
+
+Step 2: 公演詳細ページの改善
+  └─ PDF ダウンロードボタンを detail.html に追加
+  └─ 工程ごとのアサイン数・金額サマリーを表示
+
+Step 3: カレンダー/ガントチャート（オプション）
+  └─ 公演・手配状況を俯瞰できるビュー
+```
+
+### 参照ドキュメント（Week 7 用）
 
 | ドキュメント | 内容 |
 |------------|------|
 | `docs/03_SERVICE_LAYER_v4.md` | 全体設計 |
-| `docs/10_IMPLEMENTATION_ROADMAP_8WEEKS_v4.md` | Week 6 のロードマップ |
+| `docs/10_IMPLEMENTATION_ROADMAP_8WEEKS_v4.md` | Week 7 のロードマップ |
 
 ---
 
@@ -269,6 +315,19 @@ docker run --rm \
 ```
 
 ---
+
+## 動作確認チェックリスト（Week 6 完了後）
+
+```
+✅ pytest で全 82 テストが green であること（Week 6 で 21 テスト追加）
+✅ ReportService.generate_performance_report() が %PDF で始まる bytes を返すこと
+✅ ReportService.generate_financial_report() が %PDF で始まる bytes を返すこと
+✅ Lock 済みデータなし → ValidationError が raise されること
+✅ 未 Lock スロットは帳票に含まれないこと（Lock 済みのみ対象）
+✅ _get_locked_staff_data() が applied_unit_price / applied_total_amount を正しく返すこと
+✅ _get_locked_vehicle_data() が applied_cost_amount を正しく返すこと
+✅ 合計金額（grand_total）が人員費 + 配車費の合計であること
+```
 
 ## 動作確認チェックリスト（Week 5 完了後）
 

@@ -9,4 +9,6 @@ urlpatterns = [
     path('create/', views.performance_create, name='create'),
     path('<int:pk>/', views.performance_detail, name='detail'),
     path('<int:pk>/apply-template/', views.apply_template, name='apply_template'),
+    path('<int:pk>/report/performance/', views.performance_report_pdf, name='report_performance'),
+    path('<int:pk>/report/financial/', views.financial_report_pdf, name='report_financial'),
 ]

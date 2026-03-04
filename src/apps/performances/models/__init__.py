@@ -1,6 +1,6 @@
-from .base import Performance, Phase, PhaseSlot, PerformancePosition
+from .base import Performance, PerformancePosition, Phase, PhaseSlot
 from .staff import PerformanceFreelanceRate, StaffAssignment
-from .vehicle import Vehicle, VehicleOperation, VehicleAssignment
+from .vehicle import Vehicle, VehicleAssignment, VehicleOperation
 
 __all__ = [
     'Performance',

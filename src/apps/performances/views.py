@@ -7,11 +7,29 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .models import Performance
+from .services.dashboard_query_service import DashboardQueryService
 from .services.performance_service import PerformanceService
 from .services.phase_service import PhaseService
 from .services.report_service import ReportService
 
 logger = logging.getLogger(__name__)
+
+
+@login_required(login_url='accounts:login')
+def dashboard(request):
+    """乖離ダッシュボード（人員不足・時間乖離・Lock 漏れ）"""
+    staffing_shortages = DashboardQueryService.get_staffing_shortages()
+    schedule_drifts = DashboardQueryService.get_schedule_drifts()
+    unlocked_past_slots = DashboardQueryService.get_unlocked_past_slots()
+    return render(
+        request,
+        'performances/dashboard.html',
+        {
+            'staffing_shortages': staffing_shortages,
+            'schedule_drifts': schedule_drifts,
+            'unlocked_past_slots': unlocked_past_slots,
+        },
+    )
 
 
 @login_required(login_url='accounts:login')

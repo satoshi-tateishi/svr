@@ -9,6 +9,19 @@
     <h1 class="text-2xl font-bold mt-1">{{ performance.title }}</h1>
     <p class="text-sm text-gray-500 mt-1">{{ performance.start_date }} 〜 {{ performance.end_date }}</p>
   </div>
+  {% if performance.has_phases %}
+  {# PDF ダウンロードボタン #}
+  <div class="flex items-center gap-2">
+    <a href="{% url 'performances:report_performance' performance.pk %}"
+       class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 flex items-center gap-1">
+      PDF 手配書
+    </a>
+    <a href="{% url 'performances:report_financial' performance.pk %}"
+       class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 flex items-center gap-1">
+      PDF 実績証明
+    </a>
+  </div>
+  {% endif %}
 </div>
 
 {% if error %}
@@ -48,16 +61,17 @@
   <div class="space-y-3">
     {% for phase in phases %}
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-      <div class="flex items-center justify-between mb-2">
+      <div class="flex items-center justify-between mb-3">
         <span class="font-medium text-gray-800">{{ phase.name }}</span>
         {% if phase.suggested_date %}
           <span class="text-sm text-gray-500">{{ phase.suggested_date }}</span>
         {% endif %}
       </div>
       {% for slot in phase.slots.all %}
-        <div class="text-sm text-gray-600 flex items-center gap-4">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
           <span>希望人数: <strong>{{ slot.requested_staff_count }}名</strong></span>
           <span>割当済: <strong>{{ slot.actual_staff_count }}名</strong></span>
+          <span>確定済: <strong class="text-green-700">{{ slot.locked_assignment_count }}名</strong></span>
           <span class="px-2 py-0.5 rounded text-xs
             {% if slot.status == 'locked' %}bg-green-100 text-green-700
             {% elif slot.status == 'assigned' %}bg-blue-100 text-blue-700
@@ -65,7 +79,12 @@
             {{ slot.get_status_display }}
           </span>
           {% if slot.is_understaffed %}
-            <span class="text-orange-500 text-xs">⚠ 人数不足</span>
+            <span class="text-orange-500 text-xs font-medium">⚠ 人数不足</span>
+          {% endif %}
+          {% if slot.locked_assignment_count > 0 %}
+            <span class="ml-auto text-xs text-green-700 font-medium">
+              確定金額: ¥{{ slot.locked_total_amount|floatformat:0 }}
+            </span>
           {% endif %}
         </div>
       {% endfor %}

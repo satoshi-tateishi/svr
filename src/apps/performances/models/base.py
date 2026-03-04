@@ -98,6 +98,20 @@ class PhaseSlot(models.Model):
         """希望人数に対してアサインが不足しているか"""
         return self.actual_staff_count < self.requested_staff_count
 
+    @property
+    def locked_assignment_count(self):
+        """Lock 済みアサイン数（prefetch 済みキャッシュを利用）"""
+        return sum(1 for a in self.assignments.all() if a.locked_at is not None)
+
+    @property
+    def locked_total_amount(self):
+        """Lock 済みアサインの確定合計金額（prefetch 済みキャッシュを利用）"""
+        return sum(
+            (a.applied_total_amount or 0)
+            for a in self.assignments.all()
+            if a.locked_at is not None
+        )
+
 
 class PerformancePosition(models.Model):
     """公演内のポジション（役割）"""

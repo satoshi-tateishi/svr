@@ -17,7 +17,7 @@
 | Week 4 | 単価・原価管理 + 乖離分析 | ✅ 完了 |
 | Week 5 | LockService + スナップショット確定 | ✅ 完了 |
 | Week 6 | PDF 帳票出力 | ✅ 完了 |
-| Week 7 | UI ブラッシュアップ + ダッシュボード | 未着手 |
+| Week 7 | UI ブラッシュアップ + ダッシュボード | ✅ 完了 |
 | Week 8 | 本番デプロイ + SaaS 連携（freee/board） | 未着手 |
 
 ---
@@ -207,28 +207,67 @@ PDF エンドポイント:
 
 ---
 
-## Week 7 で実装するもの（次回作業）
+## Week 8 で実装するもの（次回作業）
 
-### 目標：UI ブラッシュアップ + 乖離ダッシュボード
+### 目標：本番デプロイ + オプション連携
 
 ```
-Step 1: Dashboard ビュー
-  └─ DashboardQueryService の結果を一覧表示（人員不足・時間乖離・Lock 漏れ）
+Step 1: 本番デプロイ準備
+  └─ Apache リバースプロキシ設定
+  └─ DB インデックス最適化
+  └─ Gunicorn / static ファイル設定
 
-Step 2: 公演詳細ページの改善
-  └─ PDF ダウンロードボタンを detail.html に追加
-  └─ 工程ごとのアサイン数・金額サマリーを表示
+Step 2: SaaS 連携基盤
+  └─ ApiIntegrationService のスケルトン作成（freee / board）
+  └─ applied_* フィールドのみ参照するエクスポート機能
 
-Step 3: カレンダー/ガントチャート（オプション）
-  └─ 公演・手配状況を俯瞰できるビュー
+Step 3: 最終試験
+  └─ 30 人同時アクセス下でのスナップショット生成・PDF 出力テスト
 ```
 
-### 参照ドキュメント（Week 7 用）
+### 参照ドキュメント（Week 8 用）
 
 | ドキュメント | 内容 |
 |------------|------|
-| `docs/03_SERVICE_LAYER_v4.md` | 全体設計 |
-| `docs/10_IMPLEMENTATION_ROADMAP_8WEEKS_v4.md` | Week 7 のロードマップ |
+| `docs/03_SERVICE_LAYER_v4.md` | 全体設計（ApiIntegrationService） |
+| `docs/08_DOCKER_PRODUCTION_TEMPLATE_v3.md` | Docker 本番テンプレート |
+| `docs/10_IMPLEMENTATION_ROADMAP_8WEEKS_v4.md` | Week 8 のロードマップ |
+
+---
+
+### Week 7 — UI ブラッシュアップ + 乖離ダッシュボード（完了）
+
+| ファイル | 内容 |
+|---------|------|
+| `src/apps/performances/views.py` | `dashboard()` ビューを追加（DashboardQueryService 呼び出し） |
+| `src/apps/performances/urls.py` | `dashboard/` エンドポイントを追加 |
+| `src/templates/performances/dashboard.html` | **新規** 乖離ダッシュボード（人員不足・時間乖離・Lock 漏れ 3 カード） |
+| `src/templates/performances/detail.html` | PDF ダウンロードボタン追加、Lock 済みアサイン数・金額サマリー表示 |
+| `src/templates/base.html` | ナビゲーションに「ダッシュボード」リンクを追加 |
+| `src/apps/performances/models/base.py` | `PhaseSlot.locked_assignment_count` / `locked_total_amount` プロパティを追加 |
+| `src/apps/performances/tests/test_dashboard_view.py` | **新規** 9 テスト（ビュー認証・コンテキスト・モデルプロパティ） |
+
+#### Week 7 で実装した仕様メモ
+
+```
+ダッシュボード URL: GET /performances/dashboard/
+  └─ DashboardQueryService.get_staffing_shortages()  → 人員不足スロット一覧
+  └─ DashboardQueryService.get_schedule_drifts()     → 30 分以上の時間乖離運行工程
+  └─ DashboardQueryService.get_unlocked_past_slots() → 期日超過・未確定スロット
+
+PDF ダウンロードボタン（detail.html）:
+  └─ 工程展開済みの公演のみ表示
+  └─ 「PDF 手配書」→ /performances/<pk>/report/performance/
+  └─ 「PDF 実績証明」→ /performances/<pk>/report/financial/
+
+PhaseSlot.locked_assignment_count:
+  └─ prefetch 済みキャッシュを利用（追加 DB クエリなし）
+  └─ locked_at is not None のアサインをカウント
+
+PhaseSlot.locked_total_amount:
+  └─ prefetch 済みキャッシュを利用（追加 DB クエリなし）
+  └─ locked_at is not None のアサインの applied_total_amount を合計（None は 0 扱い）
+```
 
 ---
 
@@ -315,6 +354,19 @@ docker run --rm \
 ```
 
 ---
+
+## 動作確認チェックリスト（Week 7 完了後）
+
+```
+✅ pytest で全 91 テストが green であること（Week 7 で 9 テスト追加）
+✅ GET /performances/dashboard/ が 200 を返すこと（要ログイン）
+✅ 未認証アクセスは /auth/login/ へリダイレクトされること
+✅ ダッシュボードに staffing_shortages / schedule_drifts / unlocked_past_slots が表示されること
+✅ 公演詳細ページ（has_phases=True）に PDF ダウンロードボタンが表示されること
+✅ PhaseSlot.locked_assignment_count が Lock 済みアサインのみカウントすること
+✅ PhaseSlot.locked_total_amount が Lock 済みアサインの applied_total_amount 合計を返すこと
+✅ ナビゲーションバーに「ダッシュボード」リンクが表示されること
+```
 
 ## 動作確認チェックリスト（Week 6 完了後）
 

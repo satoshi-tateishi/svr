@@ -9,7 +9,12 @@
 <body class="bg-gray-50 text-gray-800 min-h-screen">
 
 <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-  <a href="{% url 'performances:list' %}" class="font-bold text-lg text-indigo-700">svr 公演手配</a>
+  <div class="flex items-center gap-6">
+    <a href="{% url 'performances:list' %}" class="font-bold text-lg text-indigo-700">svr 公演手配</a>
+    {% if user.is_authenticated %}
+      <a href="{% url 'performances:dashboard' %}" class="text-sm text-gray-600 hover:text-indigo-600">ダッシュボード</a>
+    {% endif %}
+  </div>
   <div class="flex items-center gap-4 text-sm">
     {% if user.is_authenticated %}
       <span class="text-gray-500">{{ user.get_full_name|default:user.username }}</span>

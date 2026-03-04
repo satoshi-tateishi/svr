@@ -50,7 +50,9 @@ class PortalJWTMiddleware:
         self.get_response = get_response
         # JWKS クライアントを初期化（cache_keys=True でメモリキャッシュ有効）
         if PortalJWTMiddleware._jwks_client is None:
-            PortalJWTMiddleware._jwks_client = PyJWKClient(settings.PORTAL_JWKS_URL, cache_keys=True)
+            PortalJWTMiddleware._jwks_client = PyJWKClient(
+                settings.PORTAL_JWKS_URL, cache_keys=True
+            )
 
     def __call__(self, request):
         # AuthenticationMiddleware が設定した request.user を確認し、
@@ -93,7 +95,10 @@ class PortalJWTMiddleware:
 
         user = self._get_or_link_user(portal_uuid, email, payload)
         if user is None:
-            logger.info(f'portal_uuid={portal_uuid} に対応するユーザーが見つかりません。アクセスを拒否します。')
+            logger.info(
+                'portal_uuid=%s に対応するユーザーが見つかりません。アクセスを拒否します。',
+                portal_uuid,
+            )
             return
 
         if not user.is_active:

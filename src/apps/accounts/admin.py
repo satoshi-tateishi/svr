@@ -34,7 +34,14 @@ class UserProfileAdminForm(forms.ModelForm):
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     form = UserProfileAdminForm
-    list_display = ('get_portal_uuid', 'full_name', 'system_role', 'phone_number', 'email', 'get_is_active')
+    list_display = (
+        'get_portal_uuid',
+        'full_name',
+        'system_role',
+        'phone_number',
+        'email',
+        'get_is_active',
+    )
     list_filter = ('system_role', 'user__is_active')
     search_fields = ('user__username', 'family_name', 'given_name', 'email')
     fieldsets = (

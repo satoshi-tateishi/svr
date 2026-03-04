@@ -47,7 +47,7 @@ class TestApplyProductionTemplate:
         """工程名が TEMPLATE_STEPS と一致すること"""
         PhaseService.apply_production_template(performance, date(2026, 6, 1))
         phases = list(Phase.objects.filter(performance=performance).order_by('order'))
-        for i, (phase, step_name) in enumerate(zip(phases, TEMPLATE_STEPS)):
+        for i, (phase, step_name) in enumerate(zip(phases, TEMPLATE_STEPS, strict=False)):
             assert phase.name == f'{i + 1}. {step_name}'
 
     def test_creates_slot_for_each_phase(self, performance):
@@ -71,6 +71,7 @@ class TestApplyProductionTemplate:
         phases = list(Phase.objects.filter(performance=performance).order_by('order'))
         for i, phase in enumerate(phases):
             from datetime import timedelta
+
             assert phase.suggested_date == start + timedelta(days=i)
 
     def test_returns_list_of_phases(self, performance):

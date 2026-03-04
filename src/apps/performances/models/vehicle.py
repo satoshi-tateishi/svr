@@ -20,9 +20,7 @@ class Vehicle(models.Model):
         EXTERNAL = 'external', '外注'
 
     name = models.CharField(max_length=100, verbose_name='車輌名')
-    vehicle_type = models.CharField(
-        max_length=20, choices=VehicleType.choices, verbose_name='車種'
-    )
+    vehicle_type = models.CharField(max_length=20, choices=VehicleType.choices, verbose_name='車種')
     ownership_type = models.CharField(
         max_length=20, choices=OwnershipType.choices, verbose_name='所有区分'
     )
@@ -35,7 +33,9 @@ class Vehicle(models.Model):
         ordering = ['vehicle_type', 'name']
 
     def __str__(self):
-        return f'{self.name}（{self.get_vehicle_type_display()}／{self.get_ownership_type_display()}）'
+        return (
+            f'{self.name}（{self.get_vehicle_type_display()}／{self.get_ownership_type_display()}）'
+        )
 
     @property
     def is_external(self):

@@ -36,6 +36,7 @@ services:
   web:
     build: .
     container_name: svr_web
+    restart: always
     command: python manage.py runserver 0.0.0.0:8000
     ports:
       - "8085:8000"  # rf_finder が 8084 を使用しているため 8085 を使用
@@ -46,6 +47,8 @@ services:
     depends_on:
       db:
         condition: service_healthy  # MySQL 起動完了を待ってから起動
+      redis:
+        condition: service_started
     networks:
       - svr_network
       - shin-on-internal  # portal-app:8000 への JWKS 通信用

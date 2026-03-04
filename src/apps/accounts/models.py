@@ -55,16 +55,13 @@ class UserProfile(models.Model):
 
     def save(self, *args, **kwargs):
         # システムロールに基づいて User の権限を同期
+        # post_save シグナルの再帰発火を防ぐため update() を使用（save() は呼ばない）
         if self.system_role == self.SystemRole.ADMIN:
             if not self.user.is_staff or not self.user.is_superuser:
-                self.user.is_staff = True
-                self.user.is_superuser = True
-                self.user.save(update_fields=['is_staff', 'is_superuser'])
+                User.objects.filter(pk=self.user_id).update(is_staff=True, is_superuser=True)
         else:
             if self.user.is_staff or self.user.is_superuser:
-                self.user.is_staff = False
-                self.user.is_superuser = False
-                self.user.save(update_fields=['is_staff', 'is_superuser'])
+                User.objects.filter(pk=self.user_id).update(is_staff=False, is_superuser=False)
         super().save(*args, **kwargs)
 
     @property
@@ -78,11 +75,7 @@ class UserProfile(models.Model):
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
+    # 新規ユーザー作成時のみ UserProfile を作成する
+    # get_or_create は post_save の再帰呼び出しを誘発するため使用禁止
     if created:
-        UserProfile.objects.get_or_create(user=instance)
-
-
-@receiver(post_save, sender=User)
-def save_user_profile(sender, instance, **kwargs):
-    if hasattr(instance, 'profile'):
-        instance.profile.save()
+        UserProfile.objects.create(user=instance)

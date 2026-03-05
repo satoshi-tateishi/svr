@@ -119,13 +119,10 @@ class ReportService:
                 ...
             ]
         """
-        locked_operations = (
-            VehicleOperation.objects.filter(
-                performance=performance,
-                status=VehicleOperation.Status.LOCKED,
-            )
-            .order_by('scheduled_start', 'requested_start')
-        )
+        locked_operations = VehicleOperation.objects.filter(
+            performance=performance,
+            status=VehicleOperation.Status.LOCKED,
+        ).order_by('scheduled_start', 'requested_start')
 
         result = []
         for op in locked_operations:
@@ -235,14 +232,10 @@ class ReportService:
 
         # 金額合計の集計（applied_* フィールドのみ使用）
         total_staff_cost = sum(
-            a['applied_total_amount']
-            for phase in staff_data
-            for a in phase['assignments']
+            a['applied_total_amount'] for phase in staff_data for a in phase['assignments']
         )
         total_vehicle_cost = sum(
-            a['applied_cost_amount']
-            for op in vehicle_data
-            for a in op['assignments']
+            a['applied_cost_amount'] for op in vehicle_data for a in op['assignments']
         )
         grand_total = total_staff_cost + total_vehicle_cost
 

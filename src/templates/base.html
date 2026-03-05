@@ -17,7 +17,7 @@
   </div>
   <div class="flex items-center gap-4 text-sm">
     {% if user.is_authenticated %}
-      <span class="text-gray-500">{{ user.get_full_name|default:user.username }}</span>
+      <span class="text-gray-500">{% if user.last_name or user.first_name %}{{ user.last_name }} {{ user.first_name }}{% else %}{{ user.username }}{% endif %}</span>
       <form method="post" action="{% url 'accounts:logout' %}">
         {% csrf_token %}
         <button type="submit" class="text-gray-500 hover:text-red-600">ログアウト</button>

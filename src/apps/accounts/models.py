@@ -46,14 +46,26 @@ class UserProfile(models.Model):
     phone_number = models.CharField(max_length=20, blank=True, default='', verbose_name='電話番号')
     email = models.EmailField(blank=True, default='', verbose_name='メールアドレス')
 
+    # 表示順
+    order = models.PositiveIntegerField(default=0, verbose_name='表示順')
+
+    # スタッフ一覧への表示フラグ
+    is_staff = models.BooleanField(default=True, verbose_name='スタッフ一覧に表示')
+
     class Meta:
         verbose_name = 'ユーザープロフィール'
         verbose_name_plural = 'ユーザープロフィール'
+        ordering = ['order', 'family_name', 'given_name']
 
     def __str__(self):
         return f'{self.full_name or self.user.username} ({self.get_system_role_display()})'
 
     def save(self, *args, **kwargs):
+        # 新規作成時かつ表示順が未設定(0)の場合、自動インクリメント
+        if not self.pk and self.order == 0:
+            max_order = UserProfile.objects.aggregate(models.Max('order'))['order__max']
+            self.order = (max_order or 0) + 1
+
         # システムロールに基づいて User の権限を同期
         # post_save シグナルの再帰発火を防ぐため update() を使用（save() は呼ばない）
         if self.system_role == self.SystemRole.ADMIN:

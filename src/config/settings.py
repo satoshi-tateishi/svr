@@ -168,3 +168,8 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 CELERY_BROKER_URL = env('REDIS_URL', default='redis://redis:6379/0')
 CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://redis:6379/0')
 CELERY_TIMEZONE = 'Asia/Tokyo'
+
+# プロキシ経由でのリダイレクト先ホスト/ポートの維持設定
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

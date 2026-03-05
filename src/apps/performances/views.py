@@ -42,33 +42,48 @@ def performance_list(request):
 @login_required(login_url='accounts:login')
 def performance_create(request):
     """公演作成"""
+    users, positions = PerformanceService.get_master_data()
+
     if request.method == 'POST':
         title = request.POST.get('title', '').strip()
-        start_date = request.POST.get('start_date', '')
-        end_date = request.POST.get('end_date', '')
 
-        if not title or not start_date or not end_date:
+        if not title:
             return render(
                 request,
                 'performances/create.html',
-                {'error': 'タイトル・開始日・終了日はすべて必須です。'},
+                {
+                    'error': '公演名は必須です。',
+                    'users': users,
+                    'positions': positions,
+                },
             )
 
-        try:
-            from datetime import date
+        # 担当者データのパース
+        # フォームから user_ids[], position_ids[] として送られてくることを想定
+        user_ids = request.POST.getlist('user_ids[]')
+        position_ids = request.POST.getlist('position_ids[]')
+        responsible_staff_data = []
 
+        for uid, pid in zip(user_ids, position_ids):
+            if uid and pid:
+                responsible_staff_data.append({'user_id': int(uid), 'position_id': int(pid)})
+
+        try:
             performance = PerformanceService.create_performance(
                 title=title,
-                start_date=date.fromisoformat(start_date),
-                end_date=date.fromisoformat(end_date),
                 created_by=request.user,
+                responsible_staff_data=responsible_staff_data,
                 description=request.POST.get('description', ''),
             )
             return redirect('performances:detail', pk=performance.pk)
         except Exception as e:
-            return render(request, 'performances/create.html', {'error': str(e)})
+            return render(
+                request,
+                'performances/create.html',
+                {'error': str(e), 'users': users, 'positions': positions},
+            )
 
-    return render(request, 'performances/create.html')
+    return render(request, 'performances/create.html', {'users': users, 'positions': positions})
 
 
 @login_required(login_url='accounts:login')

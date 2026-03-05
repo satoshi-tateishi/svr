@@ -171,9 +171,7 @@ class TestGeneratePerformanceReport:
         result = ReportService.generate_performance_report(performance)
         assert result[:4] == b'%PDF'
 
-    def test_tc_pdf_03_staff_name_in_report_data(
-        self, performance, locked_slot_with_assignment
-    ):
+    def test_tc_pdf_03_staff_name_in_report_data(self, performance, locked_slot_with_assignment):
         """TC-PDF-03: _get_locked_staff_data() でスタッフ名が正しく含まれること"""
         # PDF バイトは圧縮されているため、テキスト検索の代わりに
         # ReportService の内部データ構造でスタッフ名を確認する
@@ -184,9 +182,7 @@ class TestGeneratePerformanceReport:
         # get_full_name() が「山田 太郎」または「山田太郎」を返すことを確認
         assert '山田' in assignments[0]['staff_name']
 
-    def test_tc_pdf_07_unlocked_slot_not_in_report(
-        self, performance, locked_slot_with_assignment
-    ):
+    def test_tc_pdf_07_unlocked_slot_not_in_report(self, performance, locked_slot_with_assignment):
         """TC-PDF-07: 未 Lock スロットは帳票に含まれないこと（Lock 済みのみ対象）"""
         # 未 Lock の追加スロットを作成
         phase2 = Phase.objects.create(
@@ -245,9 +241,7 @@ class TestGenerateFinancialReport:
         assert isinstance(result, bytes)
         assert result[:4] == b'%PDF'
 
-    def test_tc_pdf_05_applied_amounts_reflected(
-        self, performance, locked_slot_with_assignment
-    ):
+    def test_tc_pdf_05_applied_amounts_reflected(self, performance, locked_slot_with_assignment):
         """TC-PDF-05: 手配実績証明書に applied_* フィールドの金額が反映されること"""
         result = ReportService.generate_financial_report(performance)
         # PDF は正常生成されること（applied_* フィールドが 0 でない場合もチェック）
@@ -304,17 +298,13 @@ class TestReportServiceValidation:
         with pytest.raises(ValidationError):
             ReportService.generate_performance_report(performance)
 
-    def test_only_vehicle_locked_generates_report(
-        self, performance, locked_operation_with_vehicle
-    ):
+    def test_only_vehicle_locked_generates_report(self, performance, locked_operation_with_vehicle):
         """配車のみ Lock 済みでも（人員 Lock なし）帳票が生成できること"""
         result = ReportService.generate_performance_report(performance)
         assert isinstance(result, bytes)
         assert result[:4] == b'%PDF'
 
-    def test_only_staff_locked_generates_report(
-        self, performance, locked_slot_with_assignment
-    ):
+    def test_only_staff_locked_generates_report(self, performance, locked_slot_with_assignment):
         """人員のみ Lock 済みでも（配車 Lock なし）帳票が生成できること"""
         result = ReportService.generate_performance_report(performance)
         assert isinstance(result, bytes)

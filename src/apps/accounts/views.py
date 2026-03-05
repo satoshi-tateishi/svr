@@ -33,5 +33,12 @@ def logout_view(request):
     """ログアウトしてログインページへリダイレクトする"""
     if request.method != 'POST':
         return redirect('/')
+
     logout(request)
-    return redirect('accounts:login')
+
+    # portal_jwt クッキーを削除して、ミドルウェアによる即時自動ログインを防止する
+    response = redirect('accounts:login')
+    response.delete_cookie('portal_jwt', path='/')
+    
+    logger.info(f'ユーザーがログアウトしました: user={request.user}')
+    return response

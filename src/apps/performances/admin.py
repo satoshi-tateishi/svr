@@ -4,6 +4,7 @@ from .models import (
     Performance,
     PerformanceFreelanceRate,
     PerformancePosition,
+    PerformanceResponsibleStaff,
     Phase,
     PhaseSlot,
     StaffAssignment,
@@ -57,10 +58,10 @@ class VehicleAssignmentInline(admin.TabularInline):
     fields = ('vehicle', 'driver_user', 'is_external_driver')
 
 
-class PerformancePositionInline(admin.TabularInline):
-    model = PerformancePosition
+class PerformanceResponsibleStaffInline(admin.TabularInline):
+    model = PerformanceResponsibleStaff
     extra = 1
-    fields = ('name',)
+    fields = ('user', 'position')
 
 
 class FreelanceRateInline(admin.TabularInline):
@@ -81,11 +82,19 @@ class FreelanceRateInline(admin.TabularInline):
 
 @admin.register(Performance)
 class PerformanceAdmin(admin.ModelAdmin):
-    list_display = ('title', 'start_date', 'end_date', 'created_by', 'has_phases', 'created_at')
-    list_filter = ('start_date',)
+    list_display = ('title', 'display_start_date', 'display_end_date', 'created_by', 'has_phases', 'created_at')
+    list_filter = ('created_at',)
     search_fields = ('title',)
     readonly_fields = ('created_by', 'created_at', 'updated_at')
-    inlines = [PhaseInline, PerformancePositionInline, FreelanceRateInline]
+    inlines = [PhaseInline, PerformanceResponsibleStaffInline, FreelanceRateInline]
+
+    @admin.display(description='開始日')
+    def display_start_date(self, obj):
+        return obj.start_date
+
+    @admin.display(description='終了日')
+    def display_end_date(self, obj):
+        return obj.end_date
 
     @admin.display(description='工程展開済', boolean=True)
     def has_phases(self, obj):
@@ -95,6 +104,18 @@ class PerformanceAdmin(admin.ModelAdmin):
         if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+# ============================================================
+# ポジションマスタ（PerformancePosition）
+# ============================================================
+
+
+@admin.register(PerformancePosition)
+class PerformancePositionAdmin(admin.ModelAdmin):
+    list_display = ('name', 'order')
+    list_editable = ('order',)
+    ordering = ('order', 'name')
 
 
 # ============================================================

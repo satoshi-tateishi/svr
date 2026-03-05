@@ -5,9 +5,7 @@ from django.db import models
 class Performance(models.Model):
     """公演・案件"""
 
-    title = models.CharField(max_length=200, verbose_name='公演タイトル')
-    start_date = models.DateField(verbose_name='開始日')
-    end_date = models.DateField(verbose_name='終了日')
+    title = models.CharField(max_length=200, verbose_name='公演名')
     description = models.TextField(blank=True, default='', verbose_name='備考')
     created_by = models.ForeignKey(
         User,
@@ -23,10 +21,26 @@ class Performance(models.Model):
     class Meta:
         verbose_name = '公演'
         verbose_name_plural = '公演一覧'
-        ordering = ['-start_date']
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.title
+
+    @property
+    def start_date(self):
+        """全工程の最初の日から算出"""
+        first_phase = (
+            self.phases.exclude(suggested_date__isnull=True).order_by('suggested_date').first()
+        )
+        return first_phase.suggested_date if first_phase else None
+
+    @property
+    def end_date(self):
+        """全工程の最後の日から算出"""
+        last_phase = (
+            self.phases.exclude(suggested_date__isnull=True).order_by('suggested_date').last()
+        )
+        return last_phase.suggested_date if last_phase else None
 
     @property
     def has_phases(self):
@@ -107,26 +121,52 @@ class PhaseSlot(models.Model):
     def locked_total_amount(self):
         """Lock 済みアサインの確定合計金額（prefetch 済みキャッシュを利用）"""
         return sum(
-            (a.applied_total_amount or 0)
-            for a in self.assignments.all()
-            if a.locked_at is not None
+            (a.applied_total_amount or 0) for a in self.assignments.all() if a.locked_at is not None
         )
 
 
 class PerformancePosition(models.Model):
-    """公演内のポジション（役割）"""
+    """ポジションマスタ（役割）"""
+
+    name = models.CharField(max_length=100, unique=True, verbose_name='ポジション名')
+    order = models.PositiveIntegerField(default=0, verbose_name='表示順')
+
+    class Meta:
+        verbose_name = 'ポジションマスタ'
+        verbose_name_plural = 'ポジションマスタ一覧'
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
+class PerformanceResponsibleStaff(models.Model):
+    """公演の担当者（複数人アサイン可能）"""
 
     performance = models.ForeignKey(
         Performance,
         on_delete=models.CASCADE,
-        related_name='positions',
+        related_name='responsible_staff',
         verbose_name='公演',
     )
-    name = models.CharField(max_length=100, verbose_name='ポジション名')
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='responsible_performances',
+        verbose_name='担当者（氏名）',
+    )
+    position = models.ForeignKey(
+        PerformancePosition,
+        on_delete=models.PROTECT,
+        related_name='responsible_staff',
+        verbose_name='ポジション',
+    )
 
     class Meta:
-        verbose_name = 'ポジション'
-        verbose_name_plural = 'ポジション一覧'
+        verbose_name = '公演担当者'
+        verbose_name_plural = '公演担当者一覧'
+        unique_together = ('performance', 'user', 'position')
 
     def __str__(self):
-        return f'{self.performance.title} - {self.name}'
+        full_name = self.user.get_full_name() or self.user.username
+        return f'{self.performance.title} - {full_name} ({self.position.name})'

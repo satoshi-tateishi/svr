@@ -121,11 +121,8 @@ class PortalJWTMiddleware:
         # 1. portal_uuid で既存の紐付けを検索（最速）
         try:
             profile = UserProfile.objects.select_related('user').get(portal_uuid=portal_uuid)
-            # JWT に含まれる電話番号を常に最新値で同期する
-            jwt_phone = payload.get('phone_number', '')
-            if jwt_phone and profile.phone_number != jwt_phone:
-                profile.phone_number = jwt_phone
-                profile.save(update_fields=['phone_number'])
+            # ポータル情報を常に最新値で同期する
+            self._sync_profile_from_payload(profile, payload, email)
             return profile.user
         except UserProfile.DoesNotExist:
             pass
@@ -143,19 +140,9 @@ class PortalJWTMiddleware:
                 email=email,
                 password=None,
             )
-            # user.profile を経由してキャッシュを更新する。
-            # get_or_create だとキャッシュが更新されず、login() 後の
-            # update_last_login → post_save → save_user_profile で
-            # 古いキャッシュ（portal_uuid=None）に上書きされてしまう。
             profile = user.profile
             profile.portal_uuid = portal_uuid
-            profile.family_name = payload.get('family_name', '')
-            profile.given_name = payload.get('given_name', '')
-            profile.phonetic_family_name = payload.get('phonetic_family_name', '')
-            profile.phonetic_given_name = payload.get('phonetic_given_name', '')
-            profile.phone_number = payload.get('phone_number', '')
-            profile.email = email
-            profile.save()
+            self._sync_profile_from_payload(profile, payload, email)
             logger.info(f'新規ユーザーを自動作成しました: {email} (portal_uuid={portal_uuid})')
             return user
         except User.MultipleObjectsReturned:
@@ -165,20 +152,51 @@ class PortalJWTMiddleware:
         # UserProfile に portal_uuid を保存（以降は portal_uuid で高速検索）
         profile, _ = UserProfile.objects.get_or_create(user=user)
         profile.portal_uuid = portal_uuid
-        # JWT から最新のプロフィール情報を同期（既存値がない場合のみ上書き）
-        if not profile.family_name:
-            profile.family_name = payload.get('family_name', '')
-        if not profile.given_name:
-            profile.given_name = payload.get('given_name', '')
-        if not profile.phonetic_family_name:
-            profile.phonetic_family_name = payload.get('phonetic_family_name', '')
-        if not profile.phonetic_given_name:
-            profile.phonetic_given_name = payload.get('phonetic_given_name', '')
-        if not profile.phone_number:
-            profile.phone_number = payload.get('phone_number', '')
-        if not profile.email:
-            profile.email = email
-        profile.save()
+        self._sync_profile_from_payload(profile, payload, email)
 
         logger.info(f'portal_uuid を自動リンクしました: {user.email} -> portal_uuid={portal_uuid}')
         return user
+
+    def _sync_profile_from_payload(self, profile, payload: dict, email: str):
+        """JWT ペイロードからプロフィール情報を同期する"""
+        updated_profile_fields = []
+        user = profile.user
+        updated_user_fields = []
+
+        mapping = {
+            'family_name': 'family_name',
+            'given_name': 'given_name',
+            'phonetic_family_name': 'phonetic_family_name',
+            'phonetic_given_name': 'phonetic_given_name',
+            'phone_number': 'phone_number',
+        }
+
+        for jwt_key, model_field in mapping.items():
+            val = payload.get(jwt_key, '')
+            if val and getattr(profile, model_field) != val:
+                setattr(profile, model_field, val)
+                updated_profile_fields.append(model_field)
+
+        # User テーブルの標準フィールド (last_name, first_name) も同期
+        family_name = payload.get('family_name', '')
+        given_name = payload.get('given_name', '')
+        if family_name and user.last_name != family_name:
+            user.last_name = family_name
+            updated_user_fields.append('last_name')
+        if given_name and user.first_name != given_name:
+            user.first_name = given_name
+            updated_user_fields.append('first_name')
+
+        if email and (profile.email != email or user.email != email):
+            profile.email = email
+            updated_profile_fields.append('email')
+            user.email = email
+            updated_user_fields.append('email')
+
+        if updated_profile_fields:
+            profile.save()
+            logger.debug(f'プロフィール情報を同期しました: {user.email} fields={updated_profile_fields}')
+
+        if updated_user_fields:
+            user.save(update_fields=updated_user_fields)
+            logger.debug(f'User情報を同期しました: {user.email} fields={updated_user_fields}')

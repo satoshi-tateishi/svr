@@ -74,6 +74,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'apps.accounts.context_processors.portal_context',
             ],
         },
     },
@@ -151,6 +152,8 @@ PORTAL_JWT_AUDIENCE = env('PORTAL_JWT_AUDIENCE', default='shin-on-apps')
 
 # 未認証時のリダイレクト先（開発: http://localhost/login/ / 本番: https://portal.shin-on1981.com/login/）
 PORTAL_LOGIN_URL = env('PORTAL_LOGIN_URL', default='http://localhost/login/')
+# ポータルトップURL（PORTAL_LOGIN_URL からパスを除いたベースURL）
+PORTAL_URL = '/'.join(PORTAL_LOGIN_URL.split('/')[:3]) + '/'
 
 # ============================================================
 # セキュリティ設定（本番）

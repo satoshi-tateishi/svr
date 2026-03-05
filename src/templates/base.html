@@ -5,20 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}svr 公演手配管理{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
 
-<nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-  <div class="flex items-center gap-6">
+<nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center">
+  <!-- 左側: ロゴとダッシュボード -->
+  <div class="flex-1 flex items-center gap-6">
     <a href="{% url 'performances:list' %}" class="font-bold text-lg text-indigo-700">svr 公演手配</a>
     {% if user.is_authenticated %}
       <a href="{% url 'performances:dashboard' %}" class="text-sm text-gray-600 hover:text-indigo-600">ダッシュボード</a>
     {% endif %}
   </div>
-  <div class="flex items-center gap-4 text-sm">
+
+  <!-- 中央: ポータルリンク -->
+  <div class="flex-none">
+    <a href="{{ portal_url }}" class="text-sm font-bold flex items-center gap-2 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors text-green-600 border border-green-600">
+        <i class="fa-solid fa-house-lock"></i> to shin•on Portal
+    </a>
+  </div>
+
+  <!-- 右側: ユーザー情報とログアウト -->
+  <div class="flex-1 flex items-center justify-end gap-4 text-sm">
     {% if user.is_authenticated %}
       <span class="text-gray-500">{% if user.last_name or user.first_name %}{{ user.last_name }} {{ user.first_name }}{% else %}{{ user.username }}{% endif %}</span>
-      <form method="post" action="{% url 'accounts:logout' %}">
+      <form method="post" action="{% url 'accounts:logout' %}" class="m-0">
         {% csrf_token %}
         <button type="submit" class="text-gray-500 hover:text-red-600">ログアウト</button>
       </form>

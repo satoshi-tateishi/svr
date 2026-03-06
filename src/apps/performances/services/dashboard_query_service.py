@@ -64,7 +64,7 @@ class DashboardQueryService:
         """
         日時が超過しているが Locked になっていない PhaseSlot 一覧を返す。
 
-        Phase の suggested_date が本日より前であり、かつ
+        Phase の suggested_start_date が本日より前であり、かつ
         PhaseSlot のステータスが LOCKED でない項目を返す。
 
         Returns:
@@ -72,7 +72,7 @@ class DashboardQueryService:
         """
         today = timezone.now().date()
         return (
-            PhaseSlot.objects.filter(phase__suggested_date__lt=today)
+            PhaseSlot.objects.filter(phase__suggested_start_date__lt=today)
             .exclude(status=PhaseSlot.Status.LOCKED)
             .select_related('phase', 'phase__performance')
         )

@@ -72,7 +72,7 @@ def phase(db, performance):
         performance=performance,
         name='1. 機材作り',
         order=1,
-        suggested_date=date(2026, 6, 1),
+        suggested_start_date=date(2026, 6, 1),
     )
 
 

@@ -20,6 +20,9 @@
           <th class="px-4 py-3 text-left">開始日</th>
           <th class="px-4 py-3 text-left">終了日</th>
           <th class="px-4 py-3 text-center">工程</th>
+          {% if user.is_staff %}
+            <th class="px-4 py-3 text-right">管理</th>
+          {% endif %}
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100">
@@ -30,15 +33,42 @@
               {{ p.title }}
             </a>
           </td>
-          <td class="px-4 py-3 text-gray-600">{{ p.start_date }}</td>
-          <td class="px-4 py-3 text-gray-600">{{ p.end_date }}</td>
-          <td class="px-4 py-3 text-center">
-            {% if p.has_phases %}
-              <span class="text-green-600 font-medium">展開済</span>
+          <td class="px-4 py-3 text-gray-600">
+            {% if p.db_start_date %}
+              {{ p.db_start_date|date:"Y/m/d" }}
             {% else %}
-              <span class="text-gray-400">未展開</span>
+              <span class="text-gray-300 italic text-xs">（未設定）</span>
             {% endif %}
           </td>
+          <td class="px-4 py-3 text-gray-600">
+            {% if p.db_end_date %}
+              {{ p.db_end_date|date:"Y/m/d" }}
+            {% else %}
+              <span class="text-gray-300 italic text-xs">（未設定）</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-center">
+            {% if p.has_phases %}
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                展開済
+              </span>
+            {% else %}
+              <a href="{% url 'performances:detail' p.pk %}"
+                 class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 hover:bg-orange-200">
+                要設定
+              </a>
+            {% endif %}
+          </td>
+          {% if user.is_staff %}
+          <td class="px-4 py-3 text-right">
+            <form action="{% url 'performances:delete' p.pk %}" method="post" class="inline" onsubmit="return confirm('公演「{{ p.title }}」を削除しますか？\nこの操作は取り消せません。');">
+              {% csrf_token %}
+              <button type="submit" class="text-red-600 hover:text-red-900 text-xs font-medium focus:outline-none">
+                削除
+              </button>
+            </form>
+          </td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>

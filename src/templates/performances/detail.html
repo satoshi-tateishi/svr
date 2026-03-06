@@ -3,6 +3,9 @@
 {% block title %}{{ performance.title }} | svr{% endblock %}
 
 {% block content %}
+{# SortableJS #}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
 <div class="mb-6 flex items-start justify-between">
   <div>
     <a href="{% url 'performances:list' %}" class="text-sm text-indigo-600 hover:underline">← 公演一覧</a>
@@ -31,67 +34,14 @@
 {% endif %}
 
 {% if not performance.has_phases %}
-{# テンプレート展開セクション #}
-<div class="bg-indigo-50 border border-indigo-200 rounded-lg p-6 mb-6">
-  <h2 class="font-semibold text-indigo-800 mb-2">工程テンプレートを展開する</h2>
-  <p class="text-sm text-indigo-700 mb-4">
-    演劇制作の標準 9 工程（機材作り〜最終荷降ろし）を一括生成します。<br>
-    基準日を選択してください。各工程の予定日は基準日から 1 日ずつずれて設定されます（後で変更可）。
-  </p>
-  <form method="post" action="{% url 'performances:apply_template' performance.pk %}">
-    {% csrf_token %}
-    <div class="flex items-end gap-3">
-      <div>
-        <label for="start_date" class="block text-sm font-medium text-indigo-800 mb-1">基準日（機材作りの予定日）</label>
-        <input type="date" id="start_date" name="start_date" required
-               value="{{ performance.start_date|date:'Y-m-d' }}"
-               class="border border-indigo-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-      </div>
-      <button type="submit"
-              class="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700">
-        9工程を一括展開
-      </button>
-    </div>
-  </form>
-</div>
+  {% include "performances/includes/_template_setup.html" %}
 {% else %}
-{# 工程一覧 #}
-<section>
-  <h2 class="text-lg font-semibold mb-3">工程一覧</h2>
-  <div class="space-y-3">
-    {% for phase in phases %}
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-      <div class="flex items-center justify-between mb-3">
-        <span class="font-medium text-gray-800">{{ phase.name }}</span>
-        {% if phase.suggested_date %}
-          <span class="text-sm text-gray-500">{{ phase.suggested_date }}</span>
-        {% endif %}
-      </div>
-      {% for slot in phase.slots.all %}
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
-          <span>希望人数: <strong>{{ slot.requested_staff_count }}名</strong></span>
-          <span>割当済: <strong>{{ slot.actual_staff_count }}名</strong></span>
-          <span>確定済: <strong class="text-green-700">{{ slot.locked_assignment_count }}名</strong></span>
-          <span class="px-2 py-0.5 rounded text-xs
-            {% if slot.status == 'locked' %}bg-green-100 text-green-700
-            {% elif slot.status == 'assigned' %}bg-blue-100 text-blue-700
-            {% else %}bg-gray-100 text-gray-500{% endif %}">
-            {{ slot.get_status_display }}
-          </span>
-          {% if slot.is_understaffed %}
-            <span class="text-orange-500 text-xs font-medium">⚠ 人数不足</span>
-          {% endif %}
-          {% if slot.locked_assignment_count > 0 %}
-            <span class="ml-auto text-xs text-green-700 font-medium">
-              確定金額: ¥{{ slot.locked_total_amount|floatformat:0 }}
-            </span>
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
-    {% endfor %}
-  </div>
-</section>
+  {% include "performances/includes/_gantt_chart.html" %}
 {% endif %}
+
+{% include "performances/includes/_phase_modal.html" %}
+{% include "performances/includes/_vehicle_modal.html" %}
+
+{% include "performances/includes/_scripts.html" %}
 
 {% endblock %}

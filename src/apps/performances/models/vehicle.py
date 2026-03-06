@@ -11,6 +11,9 @@ class Vehicle(models.Model):
         TRUCK_2T = '2t', '2tトラック'
         TRUCK_2TL = '2tL', '2tロングトラック'
         TRUCK_4T = '4t', '4tトラック'
+        TRUCK_11T = '11t', '11tトラック'
+        HIACE = 'hiace', 'ハイエース'
+        KEIBAN = 'keiban', '軽バン'
         CAR = 'car', '乗用車'
         OTHER = 'other', 'その他'
 
@@ -25,12 +28,13 @@ class Vehicle(models.Model):
         max_length=20, choices=OwnershipType.choices, verbose_name='所有区分'
     )
     is_active = models.BooleanField(default=True, verbose_name='有効')
+    order = models.PositiveIntegerField(default=0, verbose_name='表示順')
     note = models.TextField(blank=True, default='', verbose_name='備考')
 
     class Meta:
         verbose_name = '車輌'
         verbose_name_plural = '車輌マスタ'
-        ordering = ['vehicle_type', 'name']
+        ordering = ['order', 'name']
 
     def __str__(self):
         return (
@@ -74,6 +78,7 @@ class VehicleOperation(models.Model):
 
     route_from = models.CharField(max_length=200, verbose_name='出発地')
     route_to = models.CharField(max_length=200, verbose_name='到着地')
+    requested_staff_count = models.PositiveIntegerField(default=0, verbose_name='希望助手人数')
     description = models.TextField(blank=True, default='', verbose_name='内容説明')
     status = models.CharField(
         max_length=20,
@@ -81,6 +86,27 @@ class VehicleOperation(models.Model):
         default=Status.DRAFT,
         verbose_name='ステータス',
     )
+    
+    # 論理削除・操作履歴
+    is_active = models.BooleanField(default=True, verbose_name='有効')
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='削除日時')
+    deleted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deleted_vehicle_operations',
+        verbose_name='削除実行者',
+    )
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_vehicle_operations',
+        verbose_name='最終更新者',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

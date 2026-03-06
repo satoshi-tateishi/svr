@@ -23,20 +23,23 @@ TEMPLATE_STEPS = [
     '舞台稽古',
     '本番',
     '劇場バラシ',
-    'ツアー・最終荷降ろし',
+    'ツアー',
+    '最終荷降ろし',
 ]
 
 
 class PhaseService:
     @staticmethod
     @transaction.atomic
-    def apply_production_template(performance: Performance, start_date: date) -> list[Phase]:
+    def apply_production_template(
+        performance: Performance, phase_data_list: list[tuple[date | None, date | None, str | None, str | None]]
+    ) -> list[Phase]:
         """
-        9工程を一括生成する。
+        10工程を一括生成する。
 
         Args:
             performance: 対象の公演
-            start_date: 工程の基準日（各工程の予定日はここから1日ずつずらして設定）
+            phase_data_list: (start_date, end_date, start_time_str, end_time_str) のリスト
 
         Returns:
             生成された Phase のリスト（order 順）
@@ -50,13 +53,27 @@ class PhaseService:
                 '二重展開を防ぐため、この操作は実行できません。'
             )
 
+        if len(phase_data_list) != len(TEMPLATE_STEPS):
+            raise ValidationError(
+                f'工程データが {len(TEMPLATE_STEPS)} 件必要です（{len(phase_data_list)} 件受信）。'
+            )
+
         created_phases = []
-        for i, step_name in enumerate(TEMPLATE_STEPS):
+        for i, (p_start_date, p_end_date, p_start_time_str, p_end_time_str) in enumerate(phase_data_list):
+            if p_start_date and p_end_date and p_start_date > p_end_date:
+                raise ValidationError(
+                    f'工程 {i + 1} ({TEMPLATE_STEPS[i]}) の開始日({p_start_date})が終了日({p_end_date})より後の日付になっています。'
+                )
+
+            step_name = TEMPLATE_STEPS[i]
             phase = Phase.objects.create(
                 performance=performance,
-                name=f'{i + 1}. {step_name}',
+                name=step_name,
                 order=i,
-                suggested_date=start_date + timedelta(days=i),
+                suggested_start_date=p_start_date,
+                suggested_end_date=p_end_date,
+                suggested_start_time=p_start_time_str if p_start_time_str else None,
+                suggested_end_time=p_end_time_str if p_end_time_str else None,
             )
             # 各工程にデフォルトの人員枠を1つ作成（希望人数は後で編集）
             PhaseSlot.objects.create(phase=phase, requested_staff_count=0)

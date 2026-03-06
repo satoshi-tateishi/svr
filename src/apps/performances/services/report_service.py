@@ -33,7 +33,7 @@ class ReportService:
             [
                 {
                     'phase_name': '1. 機材作り',
-                    'suggested_date': date(2026, 6, 1),
+                    'suggested_start_date': date(2026, 6, 1),
                     'assignments': [
                         {
                             'staff_name': '山田太郎',
@@ -85,7 +85,8 @@ class ReportService:
             result.append(
                 {
                     'phase_name': slot.phase.name,
-                    'suggested_date': slot.phase.suggested_date,
+                    'suggested_start_date': slot.phase.suggested_start_date,
+                    'suggested_end_date': slot.phase.suggested_end_date,
                     'assignments': assignment_data,
                 }
             )

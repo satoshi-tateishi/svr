@@ -6,6 +6,7 @@ from .models import (
     PerformancePosition,
     PerformanceResponsibleStaff,
     Phase,
+    PhaseMaster,
     PhaseSlot,
     StaffAssignment,
     Vehicle,
@@ -28,7 +29,7 @@ class PhaseSlotInline(admin.TabularInline):
 class PhaseInline(admin.TabularInline):
     model = Phase
     extra = 0
-    fields = ('order', 'name', 'suggested_date')
+    fields = ('order', 'name', 'suggested_start_date', 'suggested_end_date')
     ordering = ('order',)
 
 
@@ -125,9 +126,16 @@ class PerformancePositionAdmin(admin.ModelAdmin):
 
 @admin.register(Phase)
 class PhaseAdmin(admin.ModelAdmin):
-    list_display = ('name', 'performance', 'order', 'suggested_date')
+    list_display = ('name', 'performance', 'order', 'suggested_start_date', 'suggested_end_date')
     list_filter = ('performance',)
     inlines = [PhaseSlotInline]
+
+
+@admin.register(PhaseMaster)
+class PhaseMasterAdmin(admin.ModelAdmin):
+    list_display = ('name', 'order')
+    list_editable = ('order',)
+    ordering = ('order', 'name')
 
 
 # ============================================================
@@ -137,7 +145,8 @@ class PhaseAdmin(admin.ModelAdmin):
 
 @admin.register(Vehicle)
 class VehicleAdmin(admin.ModelAdmin):
-    list_display = ('name', 'vehicle_type', 'ownership_type', 'is_active')
+    list_display = ('name', 'vehicle_type', 'ownership_type', 'is_active', 'order')
+    list_editable = ('order', 'is_active')
     list_filter = ('vehicle_type', 'ownership_type', 'is_active')
     search_fields = ('name',)
 

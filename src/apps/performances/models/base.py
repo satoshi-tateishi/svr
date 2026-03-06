@@ -30,17 +30,17 @@ class Performance(models.Model):
     def start_date(self):
         """全工程の最初の日から算出"""
         first_phase = (
-            self.phases.exclude(suggested_date__isnull=True).order_by('suggested_date').first()
+            self.phases.exclude(suggested_start_date__isnull=True).order_by('suggested_start_date').first()
         )
-        return first_phase.suggested_date if first_phase else None
+        return first_phase.suggested_start_date if first_phase else None
 
     @property
     def end_date(self):
         """全工程の最後の日から算出"""
         last_phase = (
-            self.phases.exclude(suggested_date__isnull=True).order_by('suggested_date').last()
+            self.phases.exclude(suggested_end_date__isnull=True).order_by('suggested_end_date').last()
         )
-        return last_phase.suggested_date if last_phase else None
+        return last_phase.suggested_end_date if last_phase else None
 
     @property
     def has_phases(self):
@@ -59,7 +59,11 @@ class Phase(models.Model):
     )
     name = models.CharField(max_length=100, verbose_name='工程名')  # 例: "1. 機材作り"
     order = models.PositiveIntegerField(verbose_name='順序')
-    suggested_date = models.DateField(null=True, blank=True, verbose_name='予定日（目安）')
+    suggested_start_date = models.DateField(null=True, blank=True, verbose_name='開始予定日（目安）')
+    suggested_end_date = models.DateField(null=True, blank=True, verbose_name='終了予定日（目安）')
+    suggested_start_time = models.TimeField(null=True, blank=True, verbose_name='開始予定時間（目安）')
+    suggested_end_time = models.TimeField(null=True, blank=True, verbose_name='終了予定時間（目安）')
+    description = models.TextField(blank=True, default='', verbose_name='備考')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -170,3 +174,18 @@ class PerformanceResponsibleStaff(models.Model):
     def __str__(self):
         full_name = self.user.get_full_name() or self.user.username
         return f'{self.performance.title} - {full_name} ({self.position.name})'
+
+
+class PhaseMaster(models.Model):
+    """工程マスタ（追加時の選択肢）"""
+
+    name = models.CharField(max_length=100, unique=True, verbose_name='工程名')
+    order = models.PositiveIntegerField(default=0, verbose_name='表示順')
+
+    class Meta:
+        verbose_name = '工程マスタ'
+        verbose_name_plural = '工程マスタ一覧'
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        return self.name

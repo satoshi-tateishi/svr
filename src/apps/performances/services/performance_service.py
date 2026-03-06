@@ -55,15 +55,19 @@ class PerformanceService:
 
     @staticmethod
     def get_performance_list(user: User):
-        """公演一覧を取得する（工程の最小日（開始日）の降順）"""
-        from django.db.models import Min
+        """公演一覧を取得する（日程未設定を優先し、設定済みは日程順）"""
+        from django.db.models import F, Max, Min
 
         return (
             Performance.objects.annotate(
-                db_start_date=Min('phases__suggested_date')
+                db_start_date=Min('phases__suggested_start_date'),
+                db_end_date=Max('phases__suggested_end_date')
             )
             .prefetch_related('phases')
-            .order_by('-db_start_date', '-created_at')
+            .order_by(
+                F('db_start_date').asc(nulls_first=True),
+                '-created_at'
+            )
         )
 
     @staticmethod

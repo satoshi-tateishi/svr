@@ -77,7 +77,7 @@ def phase(db, performance):
         performance=performance,
         name='1. 機材作り',
         order=1,
-        suggested_date=date(2026, 7, 1),
+        suggested_start_date=date(2026, 7, 1),
     )
 
 
@@ -325,7 +325,7 @@ class TestReportServiceHelpers:
         assert len(result) == 1
         phase_data = result[0]
         assert phase_data['phase_name'] == '1. 機材作り'
-        assert phase_data['suggested_date'] == date(2026, 7, 1)
+        assert phase_data['suggested_start_date'] == date(2026, 7, 1)
         assert len(phase_data['assignments']) == 1
 
         assignment = phase_data['assignments'][0]

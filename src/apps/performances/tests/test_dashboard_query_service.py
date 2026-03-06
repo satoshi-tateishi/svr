@@ -67,7 +67,7 @@ def phase(db, performance):
         performance=performance,
         name='1. 機材作り',
         order=1,
-        suggested_date=date(2026, 6, 1),
+        suggested_start_date=date(2026, 6, 1),
     )
 
 
@@ -78,7 +78,7 @@ def past_phase(db, performance):
         performance=performance,
         name='2. 稽古場仕込み',
         order=2,
-        suggested_date=today_plus(-10),  # 10日前
+        suggested_start_date=today_plus(-10),  # 10日前
     )
 
 
@@ -89,7 +89,7 @@ def future_phase(db, performance):
         performance=performance,
         name='3. 稽古',
         order=3,
-        suggested_date=today_plus(10),  # 10日後
+        suggested_start_date=today_plus(10),  # 10日後
     )
 
 

@@ -27,12 +27,30 @@ Service層の目的：
 8.  **AllowanceService**: 手当管理
 9.  🔒 **LockService**: 全実績のスナップショット確定（最重要）
 10.  **ApiIntegrationService / DashboardQueryService / AuditLogService**
+11.  **StaffRequestService**: 人員手配の一括編集・コピー管理（New）
 
 * * *
 
 # 3. 各サービス詳細
 
 ## 3.1 PhaseService（テンプレート制御）
+...
+## 3.10 ApiIntegrationService / DashboardQueryService / AuditLogService
+...
+* * *
+
+## 3.11 StaffRequestService（人員手配一括操作）
+
+**責務**: `ProcessDay` 単位での複数人員手配の整合性管理と操作。
+
+-   **bulk_update_requests(day_id, requests_json)**:
+    
+    -   既存の手配を削除・更新し、JSONベースで一括登録する。
+    -   同一ポジションの重複禁止チェックを行う。
+-   **get_previous_day_requests(day_id)**:
+    
+    -   同一 Production 内で過去の直近日付の `StaffRequest` を検索して返す。
+    -   コピー元の日付 (`source_date`) を特定する。
 
 **責務**: 演劇の標準フローに基づき、案件の骨子を一括作成する。
 

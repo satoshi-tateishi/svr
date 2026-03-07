@@ -22,6 +22,11 @@ apps/
  │    │    └── ...
  │    ├── signals.py                 # 自動ステータス更新等
  │    └── selectors.py               # 乖離分析クエリ(希望vs確定)
+ ├── productions/
+ │    ├── models.py                  # Production, ProcessDay, StaffRequest
+ │    ├── views.py                   # HTMX + Alpine.js モーダル操作
+ │    └── templates/
+ │         └── productions/          # 一括編集・セットアップ画面
 ```
 
 * * *
@@ -204,6 +209,30 @@ def test_lock_fails_if_unassigned(admin_user, slot_draft):
     # アサインが一人もいない状態でロックしようとするとエラーになること
     with pytest.raises(ValueError, match="No assignments found"):
         LockService.lock_execution(admin_user, slot_draft.id, 'staff')
+
+
+* * *
+
+# 8. モダン UI パターン (HTMX + Alpine.js)
+
+人員手配の一括編集など、リッチなインタラクションが必要な箇所では以下のパターンを採用する。
+
+## 8.1 HTMX によるモーダル制御
+
+`hx-target="#modal"`, `hx-swap="innerHTML"` でモーダル全体を取得・差し替え、保存成功時は `HX-Redirect` または部分更新（カードのみ）を返す。
+
+## 8.2 Alpine.js によるクライアントサイド状態管理
+
+### 一括編集 (Bulk Edit)
+-   `x-data` で `requests` 配列を保持。
+-   `initial_requests` を `json_script` で渡し、`init()` で文字列型に変換して保持。
+-   `prepareSubmit()` で整数型に戻し、単一の `requests_json` hidden input に同期させて送信。
+
+### タイマー制御メッセージ
+-   多重起動を避けるため、`messageTimer` を保持し、`clearTimeout` してから新規セットする。
+
+### 確認ステップ (Two-step confirmation)
+-   削除や上書きコピーなど、破壊的な操作では `showConfirm` フラグを用いたボタンの二段階表示（通常 -> 確認）を行い、ブラウザ標準の `alert/confirm` を回避する。
 ```
 
 

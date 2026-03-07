@@ -5,7 +5,7 @@
 - **言語**: ユーザーへの回答、解説、ドキュメント、コード内コメントは、常に**日本語**で行うこと。
 - **コード品質**: 全ての Python コードはコミット前に Ruff チェック（`ruff check`）およびフォーマット（`ruff format`）を通過しなければなりません。
 - **AI実装の厳守事項**:
-    - ビジネスロジックは必ずサービス層（`src/apps/performances/services/`）に実装し、ビューに直接書かないこと。
+    - ビジネスロジックは必ずサービス層（`src/apps/performances/services/` または `src/apps/productions/services/`）に実装し、ビューに直接書かないこと。
     - **Lock の不可逆性**: `LockService` で確定したデータは絶対に解除・変更しない。修正が必要な場合は「調整用レコード」を新規作成する。
     - **トランザクション管理**: Lock 処理などは `@transaction.atomic` と `select_for_update()` を必須で使用すること。
     - **スナップショット優先**: SaaS 連携、帳票出力、集計には必ず `applied_` で始まるスナップショット項目のみを使用すること。
@@ -17,7 +17,7 @@
 
 ## 2. 技術スタック
 - **Backend**: Django (Python 3.12)
-- **Frontend**: Tailwind CSS (インライン CSS は厳禁)
+- **Frontend**: Tailwind CSS (インライン CSS は厳禁), HTMX, Alpine.js
 - **Database**: MySQL 8.4 LTS
 - **Cache/Session**: Redis
 - **Auth**: PortalJWTMiddleware (shin•on Portal JWT 連携)
@@ -52,6 +52,9 @@
     - **公演手配書**: 現場配布用（金額非表示）。
     - **手配実績証明書**: 経理提出用（Lock 済みデータから `applied_` フィールドを参照）。
 5. **ポータル連携**: JWT (`portal_jwt`) による SSO とユーザー自動紐付け・作成。
+6. **人員手配一括編集**:
+    - `ProcessDay` 単位での人員構成 (`StaffRequest`) の一括登録・編集 (HTMX + Alpine.js)。
+    - **前日コピー機能**: 同一公演内の直近の過去データをワンタップで反映。
 
 ## 5. 開発・運用コマンド
 
@@ -64,7 +67,7 @@ docker run --rm
   -v $(pwd)/pyproject.toml:/pyproject.toml 
   -w /app 
   svr_web 
-  python -m pytest apps/performances/tests/
+  python -m pytest apps/productions/tests/ apps/performances/tests/
 ```
 
 ### 5.2 コード品質 (Ruff)
@@ -83,9 +86,13 @@ ruff check src/ --fix && ruff format src/
 
 ## 7. ディレクトリ構造
 - `src/apps/accounts/`: 認証・ポータル連携
-- `src/apps/performances/`: 公演・人員・配車（コアドメイン）
+- `src/apps/performances/`: 公演・人員・配車（旧コアドメイン/移行中）
     - `models/`: 分割されたモデル定義
-    - `services/`: **ビジネスロジックの唯一の置き場所**
+    - `services/`: ビジネスロジック
     - `tests/`: ユニットテスト
+- `src/apps/productions/`: 新アーキテクチャ（公演・工程・手配管理）
+    - `models.py`: Production, ProcessDay, StaffRequest 等
+    - `views.py`: HTMX + Alpine.js によるモダンUI
+    - `tests/`: 機能テスト
 - `src/templates/`: Django テンプレート (Tailwind CSS 使用)
 - `docs/`: 最新の設計・仕様書

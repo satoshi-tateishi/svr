@@ -1,0 +1,249 @@
+<div id="modal-container" 
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm"
+     x-data="{
+        requests: [],
+        statusMessage: '',
+        statusType: '',
+        showConfirm: false,
+        messageTimer: null,
+        init() {
+            const initialData = document.getElementById('initial-requests-data').textContent;
+            const rawRequests = JSON.parse(initialData || '[]');
+            
+            this.requests = rawRequests.map(r => ({
+                ...r,
+                position_id: r.position_id ? String(r.position_id) : ''
+            }));
+            
+            if (this.requests.length === 0) {
+                this.addRow();
+            }
+        },
+        addRow() {
+            this.requests.push({
+                position_id: '',
+                quantity: 1,
+                note: ''
+            });
+        },
+        removeRow(index) {
+            this.requests.splice(index, 1);
+        },
+        setMessage(msg, type = 'info') {
+            this.statusMessage = msg;
+            this.statusType = type;
+
+            if (this.messageTimer) {
+                clearTimeout(this.messageTimer);
+                this.messageTimer = null;
+            }
+
+            if (type === 'info') {
+                this.messageTimer = setTimeout(() => {
+                    this.statusMessage = '';
+                    this.statusType = '';
+                    this.messageTimer = null;
+                    this.showConfirm = false;
+                }, 3000);
+            }
+        },
+        copyPrevious() {
+            const hasInput = this.requests.some(r => 
+                (r.position_id && r.position_id !== '') || 
+                (r.note && r.note.trim() !== '') || 
+                (parseInt(r.quantity) || 0) > 1
+            );
+
+            if (!this.showConfirm && hasInput) {
+                this.showConfirm = true;
+                this.setMessage('現在入力中の内容は上書きされます。よろしければもう一度ボタンを押してください。', 'info');
+                return;
+            }
+
+            this.showConfirm = false;
+            fetch(`{% url 'productions:staff_requests_previous' day.id %}`)
+                .then(res => res.json())
+                .then(data => {
+                    this.showConfirm = false;
+                    if (!data.source_date || data.requests.length === 0) {
+                        this.setMessage('コピー元の人員手配が見つかりませんでした。', 'error');
+                        return;
+                    }
+                    
+                    this.requests = data.requests.map(r => ({
+                        ...r,
+                        position_id: String(r.position_id)
+                    }));
+                    this.setMessage(`${data.source_date} の構成を読み込みました。`, 'info');
+                })
+                .catch(err => {
+                    this.showConfirm = false;
+                    console.error(err);
+                    this.setMessage('データの取得に失敗しました。', 'error');
+                });
+        },
+        prepareSubmit() {
+            this.requests = this.requests
+                .filter(r => r.position_id !== '')
+                .map(r => ({
+                    ...r,
+                    position_id: parseInt(r.position_id),
+                    quantity: parseInt(r.quantity) || 1
+                }));
+        }
+     }"
+     x-init="init()"
+     onclick="if(event.target === this) this.remove()">
+  
+  {# script タグをコンテナ内に移動 #}
+  {{ initial_requests|json_script:"initial-requests-data" }}
+
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
+       onclick="event.stopPropagation()">
+    <!-- ヘッダー -->
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+      <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+        <i class="fa-solid fa-users text-indigo-500"></i> 人員手配を編集
+      </h3>
+      <button type="button" class="text-gray-400 hover:text-gray-600 p-2" onclick="document.getElementById('modal-container').remove()">
+        <i class="fa-solid fa-xmark text-xl"></i>
+      </button>
+    </div>
+
+    <!-- 対象工程の情報 -->
+    <div class="px-6 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+      <div class="flex flex-col">
+        <div class="text-[10px] font-black text-indigo-400 uppercase tracking-wider mb-0.5">対象の工程</div>
+        <div class="text-xs font-bold text-indigo-700">{{ day.date|date:"Y/m/d (D)" }} | {{ day.process_type.name }}</div>
+      </div>
+      {% if day.location %}
+        <div class="text-[10px] font-bold text-indigo-600 bg-white/80 px-2 py-1 rounded-lg border border-indigo-100">
+          <i class="fa-solid fa-location-dot mr-0.5"></i>{{ day.location }}
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- フォーム -->
+    <form hx-post="{% url 'productions:staff_requests_bulk_edit' day.id %}" 
+          hx-target="#modal-container" 
+          hx-swap="outerHTML"
+          class="flex-1 overflow-y-auto p-6"
+          @submit="prepareSubmit()">
+      
+      {% csrf_token %}
+      <input type="hidden" name="requests_json" :value="JSON.stringify(requests)">
+
+      <!-- エラーメッセージ (Django) -->
+      {% if error_message %}
+        <div class="mb-5 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-700">
+          <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
+          <span class="text-xs font-bold">{{ error_message }}</span>
+        </div>
+      {% endif %}
+
+      <!-- メッセージ表示エリア (Alpine) -->
+      <div x-cloak x-show="statusMessage"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 transform -translate-y-2"
+           x-transition:enter-end="opacity-100 transform translate-y-0"
+           x-transition:leave="transition ease-in duration-200"
+           x-transition:leave-start="opacity-100 transform translate-y-0"
+           x-transition:leave-end="opacity-0 transform -translate-y-2"
+           class="mb-5 p-4 rounded-xl flex items-start gap-3 border shadow-sm"
+           :class="statusType === 'error'
+               ? 'bg-red-50 border-red-100 text-red-700'
+               : 'bg-indigo-50 border-indigo-100 text-indigo-700'">
+        <i class="fa-solid mt-0.5"
+           :class="statusType === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info'"></i>
+        <span class="text-xs font-bold" x-text="statusMessage"></span>
+      </div>
+
+      <div class="space-y-4 pb-4">
+        <template x-for="(req, index) in requests" :key="index">
+          <div class="group p-4 bg-gray-50 rounded-2xl border border-gray-100 transition-all hover:border-indigo-100 hover:bg-white hover:shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-[10px] font-black text-gray-300 uppercase tracking-tighter" x-text="'手配 #' + (index + 1)"></span>
+              <button type="button" @click="removeRow(index)" class="text-gray-300 hover:text-red-500 transition-colors p-1" title="行を削除">
+                <i class="fa-solid fa-trash-can text-sm"></i>
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- ポジション -->
+              <div>
+                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">ポジション</label>
+                <select x-model="req.position_id" 
+                        class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5 bg-white">
+                  <option value="">-- 選択してください --</option>
+                  {% for pos in positions %}
+                    <option value="{{ pos.id }}">{{ pos.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <!-- 人数 -->
+              <div>
+                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">必要人数</label>
+                <div class="relative">
+                  <input type="number" x-model="req.quantity" min="1"
+                         class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5 pr-10">
+                  <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <span class="text-gray-400 text-[10px] font-black uppercase">名</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 備考 -->
+            <div class="mt-3">
+              <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">備考 (任意)</label>
+              <textarea x-model="req.note" rows="2" placeholder="例: スキル保持者希望"
+                        class="block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2.5"></textarea>
+            </div>
+          </div>
+        </template>
+
+        <!-- 手配がない場合 -->
+        <template x-if="requests.length === 0">
+          <div class="py-10 px-6 border-2 border-dashed border-gray-100 rounded-2xl text-center">
+            <p class="text-xs font-bold text-gray-400">人員手配がありません</p>
+            <p class="text-[10px] text-gray-300 mt-1">下のボタンから追加してください</p>
+          </div>
+        </template>
+      </div>
+
+      <!-- 前日コピーボタン -->
+      <div class="mt-4 mb-2">
+        <button type="button"
+                @click="copyPrevious()"
+                class="w-full py-3.5 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2"
+                :class="showConfirm
+                    ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-lg shadow-amber-100'
+                    : 'border-2 border-dashed border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/30'">
+          <i class="fa-solid" :class="showConfirm ? 'fa-triangle-exclamation' : 'fa-copy'"></i>
+          <span x-text="showConfirm ? 'もう一度押すと上書きコピー' : '前日コピー'"></span>
+        </button>
+      </div>
+
+      <!-- 行追加ボタン -->
+      <div class="mt-2">
+        <button type="button" @click="addRow()"
+                class="w-full py-3.5 border-2 border-dashed border-gray-200 rounded-2xl text-xs font-black text-gray-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2">
+          <i class="fa-solid fa-plus"></i> 手配枠を追加
+        </button>
+      </div>
+
+      <!-- フッター -->
+      <div class="mt-10 pt-6 border-t border-gray-100 flex gap-3 bg-white sticky bottom-0">
+        <button type="button" onclick="document.getElementById('modal-container').remove()"
+                class="flex-1 px-4 py-4 border border-gray-200 rounded-2xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors">
+          キャンセル
+        </button>
+        <button type="submit"
+                class="flex-1 px-4 py-4 bg-indigo-600 rounded-2xl text-sm font-black text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">
+          変更を保存
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

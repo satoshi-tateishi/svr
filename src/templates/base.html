@@ -7,6 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- htmx -->
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <!-- Alpine.js -->
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <!-- FontAwesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   {% block extra_head %}{% endblock %}
@@ -54,6 +56,15 @@
 </main>
 
 <div id="modal"></div>
+
+<script>
+  // HTMX でコンテンツが差し替えられた後に Alpine.js を初期化する
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (window.Alpine && (evt.target.id === 'modal' || evt.target.id === 'modal-container')) {
+      window.Alpine.initTree(evt.target);
+    }
+  });
+</script>
 
 {% block extra_scripts %}{% endblock %}
 </body>

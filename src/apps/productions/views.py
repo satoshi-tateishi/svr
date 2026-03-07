@@ -11,9 +11,198 @@ from django.urls import reverse
 from django.utils import timezone
 from django.db import transaction
 
-from .forms import ProcessDayForm
-from .models import ProcessDay, Production, Process, ProcessType, ProductionTemplate
+from .forms import ProcessDayForm, StaffRequestForm
+from .models import ProcessDay, Production, Process, ProcessType, ProductionTemplate, StaffRequest, Position
 from .templates import PRODUCTION_TEMPLATES, LOCATION_GROUPS
+
+
+class StaffRequestBulkEditView(LoginRequiredMixin, View):
+    """人員手配の一括編集（モーダル用・Alpine.js使用）"""
+
+    def get(self, request, day_pk):
+        day = get_object_or_404(ProcessDay, pk=day_pk)
+        # 既存の手配を取得（初期値）
+        requests_data = list(day.staff_requests.all().values("position_id", "quantity", "note"))
+        # ポジションマスタ
+        positions = Position.objects.all().order_by("order")
+
+        return render(
+            request,
+            "productions/staff_request_bulk_form.html",
+            {
+                "day": day,
+                "initial_requests": requests_data,
+                "positions": positions,
+            },
+        )
+
+    def post(self, request, day_pk):
+        day = get_object_or_404(ProcessDay, pk=day_pk)
+        data_json = request.POST.get("requests_json", "[]")
+
+        # 効率化のため、ポジションマスタを先にマップ化・IDセット化しておく
+        positions = Position.objects.all().order_by("order")
+        position_map = {p.id: p.name for p in positions}
+        valid_position_ids = set(position_map.keys())
+
+        # 再描画用の共通コンテキスト（エラー時用）
+        error_context = {
+            "day": day,
+            "positions": positions,
+        }
+
+        try:
+            submitted_data = json.loads(data_json)
+            error_context["initial_requests"] = submitted_data
+        except json.JSONDecodeError:
+            error_context["error_message"] = "データの形式が不正です。"
+            return render(request, "productions/staff_request_bulk_form.html", error_context)
+
+        # 1. 有効な行のみ抽出（ポジション未選択の行は無視）
+        valid_items = []
+        seen_positions = set()
+
+        for item in submitted_data:
+            raw_pos_id = item.get("position_id")
+            if not raw_pos_id:
+                continue
+
+            try:
+                pos_id = int(raw_pos_id)
+                qty = int(item.get("quantity") or 0)
+            except (ValueError, TypeError):
+                error_context["error_message"] = "入力内容が不正です。"
+                return render(request, "productions/staff_request_bulk_form.html", error_context)
+
+            # ポジションの実在確認 (メモリ内セットで高速検証)
+            if pos_id not in valid_position_ids:
+                error_context["error_message"] = f"存在しないポジションが含まれています (ID:{pos_id})。"
+                return render(request, "productions/staff_request_bulk_form.html", error_context)
+
+            # 重複チェック
+            if pos_id in seen_positions:
+                name = position_map.get(pos_id, f"ID:{pos_id}")
+                error_context["error_message"] = f"ポジション「{name}」が重複しています。"
+                return render(request, "productions/staff_request_bulk_form.html", error_context)
+            seen_positions.add(pos_id)
+
+            # 数量チェック
+            if qty < 1:
+                error_context["error_message"] = f"「{position_map.get(pos_id)}」の人数は1名以上で入力してください。"
+                return render(request, "productions/staff_request_bulk_form.html", error_context)
+
+            valid_items.append({
+                "position_id": pos_id,
+                "quantity": qty,
+                "note": (item.get("note") or "").strip()
+            })
+
+        # 2. 保存処理（トランザクション）
+        with transaction.atomic():
+            # JSONに含まれない既存レコードを削除（同期）
+            incoming_position_ids = [item["position_id"] for item in valid_items]
+            day.staff_requests.exclude(position_id__in=incoming_position_ids).delete()
+
+            # 各項目の更新または作成
+            for item in valid_items:
+                StaffRequest.objects.update_or_create(
+                    process_day=day,
+                    position_id=item["position_id"],
+                    defaults={
+                        "quantity": item["quantity"],
+                        "note": item["note"]
+                    }
+                )
+
+        # 3. 成功時は全体リダイレクト
+        response = HttpResponse()
+        response["HX-Redirect"] = reverse("productions:detail", kwargs={"pk": day.process.production.id})
+        return response
+
+
+class PreviousStaffRequestView(LoginRequiredMixin, View):
+    """前日の人員手配を取得する（JSON用）"""
+
+    def get(self, request, day_pk):
+        day = get_object_or_404(ProcessDay, pk=day_pk)
+
+        # 同一 Production 内で現在の日付より前、かつ最も近い日付の ProcessDay を取得
+        previous_day = (
+            ProcessDay.objects.filter(
+                process__production=day.process.production,
+                date__lt=day.date,
+            )
+            .order_by("-date", "-id")
+            .first()
+        )
+
+        if not previous_day:
+            return JsonResponse({
+                "source_date": None,
+                "requests": [],
+            })
+
+        # その日の StaffRequest を取得
+        requests_data = list(
+            previous_day.staff_requests.all().values(
+                "position_id",
+                "quantity",
+                "note",
+            )
+        )
+
+        return JsonResponse({
+            "source_date": previous_day.date.strftime("%Y/%m/%d"),
+            "requests": requests_data,
+        })
+
+
+class StaffRequestEditView(LoginRequiredMixin, View):
+    """人員手配の追加・編集（モーダル用）"""
+    def get(self, request, day_pk):
+        day = get_object_or_404(ProcessDay, pk=day_pk)
+        request_pk = request.GET.get("request_pk")
+        
+        instance = None
+        if request_pk:
+            # その日に属するレコードであることを保証
+            instance = StaffRequest.objects.filter(pk=request_pk, process_day=day).first()
+        
+        form = StaffRequestForm(instance=instance)
+        return render(request, "productions/staff_request_form.html", {
+            "day": day,
+            "form": form,
+            "instance": instance
+        })
+
+    def post(self, request, day_pk):
+        day = get_object_or_404(ProcessDay, pk=day_pk)
+        request_pk = request.POST.get("request_pk")
+        position_id = request.POST.get("position")
+        
+        instance = None
+        if request_pk:
+            # 1. 編集時: 指定された ID で取得
+            instance = StaffRequest.objects.filter(pk=request_pk, process_day=day).first()
+        elif position_id:
+            # 2. 新規追加時: 同一ポジションが既にある場合はそちらを更新対象にする
+            instance = StaffRequest.objects.filter(process_day=day, position_id=position_id).first()
+            
+        form = StaffRequestForm(request.POST, instance=instance)
+        if form.is_valid():
+            req = form.save(commit=False)
+            req.process_day = day
+            req.save()
+            
+            response = HttpResponse()
+            response["HX-Redirect"] = reverse("productions:detail", kwargs={"pk": day.process.production.id})
+            return response
+        
+        return render(request, "productions/staff_request_form.html", {
+            "day": day,
+            "form": form,
+            "instance": instance
+        })
 
 
 class ProductionTemplateListView(LoginRequiredMixin, View):

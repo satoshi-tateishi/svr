@@ -1,5 +1,20 @@
 from django import forms
-from .models import ProcessDay, ProcessType
+from .models import ProcessDay, ProcessType, StaffRequest, Position
+
+class StaffRequestForm(forms.ModelForm):
+    class Meta:
+        model = StaffRequest
+        fields = ["position", "quantity", "note"]
+        widgets = {
+            "position": forms.Select(attrs={"class": "form-select block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"}),
+            "quantity": forms.NumberInput(attrs={"min": 1, "class": "form-input block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"}),
+            "note": forms.Textarea(attrs={"rows": 2, "placeholder": "備考（任意）", "class": "form-textarea block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['position'].queryset = Position.objects.all().order_by('order')
+
 
 class ProcessDayForm(forms.ModelForm):
     class Meta:

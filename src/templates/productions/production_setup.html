@@ -2,10 +2,6 @@
 
 {% block title %}工程のセットアップ - {{ production.title }}{% endblock %}
 
-{% block extra_head %}
-<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-{% endblock %}
-
 {% block content %}
 {{ location_slots|json_script:"loc-data" }}
 {{ template_blocks|json_script:"block-defs" }}

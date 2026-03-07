@@ -76,6 +76,7 @@ class UserProfileAdminForm(forms.ModelForm):
             'phonetic_given_name',
             'phone_number',
             'email',
+            'is_active_staff',
         )
 
     def __init__(self, *args, **kwargs):
@@ -90,9 +91,9 @@ class UserProfileAdmin(admin.ModelAdmin):
     list_display = (
         'order',
         'display_full_name',
-        'is_staff',
+        'is_active_staff',
     )
-    list_editable = ('order', 'is_staff')
+    list_editable = ('order', 'is_active_staff')
     list_display_links = ('display_full_name',)
     list_filter = ('system_role', 'user__is_active')
     search_fields = ('user__username', 'family_name', 'given_name', 'email')
@@ -123,7 +124,7 @@ class UserProfileAdmin(admin.ModelAdmin):
                 'fields': (
                     'system_role',
                     'order',
-                    'is_staff',
+                    'is_active_staff',
                 ),
             },
         ),

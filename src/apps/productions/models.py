@@ -60,8 +60,22 @@ class ProductionHoliday(models.Model):
 
 class ProcessType(models.Model):
     """工程種別マスター（劇場仕込み、本番、バラシ、荷降ろし等）"""
+    CATEGORY_CHOICES = [
+        ("rehearsal", "稽古場関連"),
+        ("venue", "劇場関連"),
+        ("warehouse", "倉庫関連"),
+        ("logistics", "荷積み荷降ろし・輸送関連"),
+        ("performance", "本番関連"),
+        ("other", "その他"),
+    ]
     name = models.CharField(max_length=100, verbose_name="工程種別名")
     slug = models.SlugField(max_length=50, unique=True, verbose_name="識別スラッグ")
+    category = models.CharField(
+        max_length=20, 
+        choices=CATEGORY_CHOICES, 
+        default="other", 
+        verbose_name="カテゴリー"
+    )
     
     # ガントチャート用のカラー設定
     color = models.CharField(
@@ -104,6 +118,28 @@ class Position(models.Model):
 # =========================
 # 工程・申請
 # =========================
+
+class ProductionTemplate(models.Model):
+    """工程構成のテンプレートプリセット"""
+    name = models.CharField(max_length=100, verbose_name="テンプレート名")
+    description = models.TextField(blank=True, verbose_name="説明")
+
+    # production_setup の instances と同じ構造を保存
+    template_data = models.JSONField(verbose_name="テンプレートデータ")
+
+    is_active = models.BooleanField(default=True, verbose_name="有効")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="作成日時")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新日時")
+
+    class Meta:
+        verbose_name = "工程テンプレート"
+        verbose_name_plural = "工程テンプレート"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
 
 class Process(models.Model):
     """公演ブロック（大阪公演、東京公演、移動、倉庫作業期間など）"""

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}公演一覧 - svr{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto relative pb-20">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">公演一覧</h1>
+  </div>
+
+  <div class="space-y-4">
+    {% for prod in productions %}
+      <a href="{% url 'productions:detail' prod.pk %}" class="block bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:border-indigo-300 transition-colors">
+        <div class="flex justify-between items-start mb-2">
+          <h2 class="text-lg font-bold text-gray-900 leading-tight">{{ prod.title }}</h2>
+        </div>
+        
+        <div class="space-y-2">
+          <div class="flex items-center text-sm text-gray-600">
+            <i class="fa-regular fa-calendar-range w-5"></i>
+            <span>
+              {% if prod.start_date %}
+                {{ prod.start_date|date:"Y/m/d" }} 〜 {{ prod.end_date|date:"m/d" }}
+              {% else %}
+                期間未設定
+              {% endif %}
+            </span>
+          </div>
+          <div class="flex items-center text-sm text-gray-600">
+            <i class="fa-regular fa-user-pen w-5"></i>
+            <span>作成者: {{ prod.created_by.profile.full_name|default:prod.created_by.username }}</span>
+          </div>
+        </div>
+
+        {% if prod.note %}
+          <p class="mt-3 text-sm text-gray-500 line-clamp-2">
+            {{ prod.note }}
+          </p>
+        {% endif %}
+
+        <div class="mt-4 flex justify-end">
+          <span class="text-indigo-600 text-sm font-medium flex items-center gap-1">
+            詳細を表示 <i class="fa-solid fa-chevron-right text-xs"></i>
+          </span>
+        </div>
+      </a>
+    {% empty %}
+      <div class="text-center py-12 bg-white rounded-xl border-2 border-dashed border-gray-200">
+        <i class="fa-regular fa-folder-open text-4xl text-gray-300 mb-3 block"></i>
+        <p class="text-gray-500">公開されている公演はありません</p>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- 新規作成ボタン (Floating) -->
+  <a href="{% url 'productions:create' %}" class="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-300 hover:bg-indigo-700 transition-all z-20">
+    <i class="fa-solid fa-plus text-2xl"></i>
+  </a>
+</div>
+{% endblock %}

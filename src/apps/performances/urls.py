@@ -17,6 +17,7 @@ urlpatterns = [
     path('<int:pk>/phases/reorder/', views.phase_reorder, name='phase_reorder'),
     path('<int:pk>/vehicles/add/', views.vehicle_operation_create, name='vehicle_operation_add'),
     path('vehicles/<int:pk>/delete/', views.vehicle_operation_delete, name='vehicle_operation_delete'),
+    path('<int:pk>/vehicles/batch-delete/', views.vehicle_operation_batch_delete, name='vehicle_operation_batch_delete'),
     path('<int:pk>/report/performance/', views.performance_report_pdf, name='report_performance'),
     path('<int:pk>/report/financial/', views.financial_report_pdf, name='report_financial'),
 ]

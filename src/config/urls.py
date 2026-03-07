@@ -6,5 +6,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('auth/', include('apps.accounts.urls')),
     path('performances/', include('apps.performances.urls')),
+    path('productions/', include('apps.productions.urls')),
     path('', RedirectView.as_view(url='/performances/'), name='index'),
 ]

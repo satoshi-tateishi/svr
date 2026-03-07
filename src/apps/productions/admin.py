@@ -1,8 +1,17 @@
 from django.contrib import admin
 from .models import (
-    Production, ProductionHoliday, ProcessType, 
-    Position, Process, ProcessDay, StaffRequest, VehicleRequest
+    Production, ProductionHoliday, ProcessType, Position, 
+    Process, ProcessDay, StaffRequest, VehicleRequest,
+    ProductionTemplate
 )
+
+@admin.register(ProductionTemplate)
+class ProductionTemplateAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_active", "updated_at")
+    list_editable = ("is_active",)
+    search_fields = ("name", "description")
+    ordering = ("name",)
+
 
 class ProductionHolidayInline(admin.TabularInline):
     model = ProductionHoliday

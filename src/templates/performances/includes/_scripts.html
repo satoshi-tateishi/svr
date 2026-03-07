@@ -91,6 +91,13 @@
     if (!dataEl) return;
     let ops = JSON.parse(dataEl.textContent);
 
+    // 有効な工程のIDリストを作成
+    const activeOpIds = ops.filter(op => op.is_active).map(op => op.id);
+    const deleteBtn = document.getElementById('v_modal_delete_btn');
+    if (deleteBtn && activeOpIds.length > 0) {
+        deleteBtn.setAttribute('onclick', `deleteVehicleOperation('${activeOpIds.join(',')}', '{{ performance.pk }}')`);
+    }
+
     // ソート: 1. is_active(有効優先), 2. time(昇順)
     ops.sort((a, b) => {
         if (a.is_active !== b.is_active) {
@@ -157,12 +164,36 @@
     if (addBtn) addBtn.classList.remove('hidden');
   }
 
-  function deleteVehicleOperation(opId) {
+  function deleteVehicleOperation(opId, performanceId = null) {
     if (!opId) return;
-    if (confirm('この工程を削除（無効化）しますか？\n削除履歴はシステムに保存されます。')) {
+    
+    // 文字列化して判定
+    const opIdStr = String(opId);
+    const isBatch = opIdStr.includes(',');
+    
+    const confirmMsg = (isBatch || (performanceId && performanceId !== 'null'))
+        ? 'この車輌手配（一連の工程すべて）を削除（無効化）しますか？\n削除履歴はシステムに保存されます。'
+        : 'この工程を削除（無効化）しますか？\n削除履歴はシステムに保存されます。';
+
+    if (confirm(confirmMsg)) {
       const form = document.createElement('form');
       form.method = 'POST';
-      form.action = `/performances/vehicles/${opId}/delete/`;
+      
+      // performanceId が有効なら一括削除エンドポイントを使用
+      if (performanceId && performanceId !== 'null') {
+          form.action = `/performances/${performanceId}/vehicles/batch-delete/`;
+          const idsInput = document.createElement('input');
+          idsInput.type = 'hidden';
+          idsInput.name = 'op_ids';
+          idsInput.value = opIdStr;
+          form.appendChild(idsInput);
+      } else {
+          // performanceId がない場合は単一削除。
+          // 万が一 opId にカンマが含まれている場合は、最初の一つを使用するなどの安全策をとる
+          const singleId = isBatch ? opIdStr.split(',')[0] : opIdStr;
+          form.action = `/performances/vehicles/${singleId}/delete/`;
+      }
+      
       const csrf = document.createElement('input');
       csrf.type = 'hidden';
       csrf.name = 'csrfmiddlewaretoken';
@@ -268,7 +299,7 @@
         </div>
         ` : ''}
       </div>
-      <button type="button" onclick="${opId ? `deleteVehicleOperation('${opId}')` : `if(confirm('この工程の入力を削除しますか？')) { this.parentElement.remove(); updateVehicleProcessIndices(); }`}" 
+      <button type="button" onclick="${opId ? `deleteVehicleOperation('${opId}', '{{ performance.pk }}')` : `if(confirm('この工程の入力を削除しますか？')) { this.parentElement.remove(); updateVehicleProcessIndices(); }`}" 
               class="text-gray-300 hover:text-red-500 mt-1 transition-colors p-1" title="削除">
         <i class="fa-solid fa-trash-can text-lg"></i>
       </button>

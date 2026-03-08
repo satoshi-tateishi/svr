@@ -86,7 +86,7 @@ class VehicleOperation(models.Model):
         default=Status.DRAFT,
         verbose_name='ステータス',
     )
-    
+
     # 論理削除・操作履歴
     is_active = models.BooleanField(default=True, verbose_name='有効')
     deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='削除日時')

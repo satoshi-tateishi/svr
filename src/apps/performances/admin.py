@@ -83,7 +83,14 @@ class FreelanceRateInline(admin.TabularInline):
 
 @admin.register(Performance)
 class PerformanceAdmin(admin.ModelAdmin):
-    list_display = ('title', 'display_start_date', 'display_end_date', 'created_by', 'has_phases', 'created_at')
+    list_display = (
+        'title',
+        'display_start_date',
+        'display_end_date',
+        'created_by',
+        'has_phases',
+        'created_at',
+    )
     list_filter = ('created_at',)
     search_fields = ('title',)
     readonly_fields = ('created_by', 'created_at', 'updated_at')

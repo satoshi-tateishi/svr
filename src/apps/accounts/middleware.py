@@ -195,7 +195,9 @@ class PortalJWTMiddleware:
 
         if updated_profile_fields:
             profile.save()
-            logger.debug(f'プロフィール情報を同期しました: {user.email} fields={updated_profile_fields}')
+            logger.debug(
+                f'プロフィール情報を同期しました: {user.email} fields={updated_profile_fields}'
+            )
 
         if updated_user_fields:
             user.save(update_fields=updated_user_fields)

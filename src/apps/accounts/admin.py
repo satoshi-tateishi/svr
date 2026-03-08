@@ -1,11 +1,10 @@
 from django import forms
 from django.contrib import admin
-from django.utils.html import format_html
-
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from .models import UserProfile
+from django.utils.html import format_html
 
+from .models import UserProfile
 
 # ============================================================
 # 標準 User モデルのカスタマイズ
@@ -97,17 +96,16 @@ class UserProfileAdmin(admin.ModelAdmin):
     list_display_links = ('display_full_name',)
     list_filter = ('system_role', 'user__is_active')
     search_fields = ('user__username', 'family_name', 'given_name', 'email')
-    
+
     @admin.display(description='氏名', ordering='family_name')
     def display_full_name(self, obj):
         return obj.full_name
+
     fieldsets = (
         (
             '基本情報',
             {
-                'description': (
-                    'テストデータ作成のため、全フィールドを編集可能にしています。'
-                ),
+                'description': ('テストデータ作成のため、全フィールドを編集可能にしています。'),
                 'fields': (
                     ('family_name', 'given_name'),
                     ('phonetic_family_name', 'phonetic_given_name'),

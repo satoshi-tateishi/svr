@@ -2,14 +2,14 @@
 PerformanceService — 公演 CRUD サービス
 """
 
-from datetime import date
-
 from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from apps.performances.models.base import Performance, PerformanceResponsibleStaff, PerformancePosition
-from .phase_service import PhaseService
+from apps.performances.models.base import (
+    Performance,
+    PerformancePosition,
+    PerformanceResponsibleStaff,
+)
 
 
 class PerformanceService:
@@ -46,9 +46,7 @@ class PerformanceService:
                 user = User.objects.get(pk=item['user_id'])
                 position = PerformancePosition.objects.get(pk=item['position_id'])
                 PerformanceResponsibleStaff.objects.create(
-                    performance=performance,
-                    user=user,
-                    position=position
+                    performance=performance, user=user, position=position
                 )
 
         return performance
@@ -61,13 +59,10 @@ class PerformanceService:
         return (
             Performance.objects.annotate(
                 db_start_date=Min('phases__suggested_start_date'),
-                db_end_date=Max('phases__suggested_end_date')
+                db_end_date=Max('phases__suggested_end_date'),
             )
             .prefetch_related('phases')
-            .order_by(
-                F('db_start_date').asc(nulls_first=True),
-                '-created_at'
-            )
+            .order_by(F('db_start_date').asc(nulls_first=True), '-created_at')
         )
 
     @staticmethod

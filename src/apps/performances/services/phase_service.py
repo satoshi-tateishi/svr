@@ -6,7 +6,7 @@ PhaseService — 工程テンプレート展開サービス
 テンプレート展開は冪等性ガード付き（既に Phase が存在する場合は ValidationError）。
 """
 
-from datetime import date, timedelta
+from datetime import date
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -32,7 +32,8 @@ class PhaseService:
     @staticmethod
     @transaction.atomic
     def apply_production_template(
-        performance: Performance, phase_data_list: list[tuple[date | None, date | None, str | None, str | None]]
+        performance: Performance,
+        phase_data_list: list[tuple[date | None, date | None, str | None, str | None]],
     ) -> list[Phase]:
         """
         10工程を一括生成する。
@@ -59,10 +60,12 @@ class PhaseService:
             )
 
         created_phases = []
-        for i, (p_start_date, p_end_date, p_start_time_str, p_end_time_str) in enumerate(phase_data_list):
+        for i, phase_data in enumerate(phase_data_list):
+            p_start_date, p_end_date, p_start_time_str, p_end_time_str = phase_data
             if p_start_date and p_end_date and p_start_date > p_end_date:
                 raise ValidationError(
-                    f'工程 {i + 1} ({TEMPLATE_STEPS[i]}) の開始日({p_start_date})が終了日({p_end_date})より後の日付になっています。'
+                    f'工程 {i + 1} ({TEMPLATE_STEPS[i]}) の'
+                    f'開始日({p_start_date})が終了日({p_end_date})より後の日付になっています。'
                 )
 
             step_name = TEMPLATE_STEPS[i]

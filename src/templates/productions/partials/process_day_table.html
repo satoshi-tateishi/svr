@@ -1,0 +1,119 @@
+<div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50 border-b border-gray-200">
+      <tr>
+        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">工程</th>
+        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">場所</th>
+        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">時間</th>
+        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">人員</th>
+        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">車両</th>
+        <th class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">操作</th>
+      </tr>
+    </thead>
+    <tbody class="bg-white divide-y divide-gray-100">
+      {% for day in group.days %}
+        <tr class="hover:bg-gray-50 transition-colors">
+
+          {# 工程 #}
+          <td class="px-4 py-3 whitespace-nowrap">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full flex-none" style="background-color: {{ day.process_type.color }};"></span>
+              <span class="font-bold text-gray-900">{{ day.process_type.name }}</span>
+            </div>
+          </td>
+
+          {# 場所 #}
+          <td class="px-4 py-3 text-gray-600 whitespace-nowrap">
+            {% if day.location %}
+              <span class="flex items-center gap-1">
+                <i class="fa-solid fa-location-dot text-gray-300 text-xs"></i>
+                {{ day.location }}
+              </span>
+            {% else %}
+              <span class="text-gray-300 italic text-xs">未設定</span>
+            {% endif %}
+          </td>
+
+          {# 時間 #}
+          <td class="px-4 py-3 whitespace-nowrap">
+            <span class="inline-block px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-bold">
+              {% if day.start_time and day.end_time %}
+                {{ day.start_time|time:"H:i" }} - {{ day.end_time|time:"H:i" }}
+              {% elif day.start_time %}
+                {{ day.start_time|time:"H:i" }} 〜
+              {% elif day.end_time %}
+                〜 {{ day.end_time|time:"H:i" }}
+              {% else %}
+                終日
+              {% endif %}
+            </span>
+          </td>
+
+          {# 人員 #}
+          <td class="px-4 py-3 align-top">
+            {% if day.staff_requests.all %}
+              <div class="flex flex-wrap gap-1.5">
+                {% for req in day.staff_requests.all %}
+                  <button type="button"
+                          title="人員手配を編集"
+                          hx-get="{% url 'productions:staff_requests_bulk_edit' day.id %}"
+                          hx-target="#modal"
+                          hx-swap="innerHTML"
+                          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold whitespace-nowrap ring-1 ring-indigo-100 cursor-pointer hover:bg-indigo-100 transition-colors">
+                    <i class="fa-solid fa-user text-indigo-300 text-[10px]"></i>
+                    {{ req.position.name }} ×{{ req.quantity }}
+                  </button>
+                {% endfor %}
+              </div>
+            {% else %}
+              <button type="button"
+                      title="人員手配を追加"
+                      hx-get="{% url 'productions:staff_requests_bulk_edit' day.id %}"
+                      hx-target="#modal"
+                      hx-swap="innerHTML"
+                      class="inline-flex items-center text-gray-400 italic text-xs border border-dashed border-gray-200 rounded-full px-2.5 py-1 cursor-pointer hover:bg-indigo-50/50 transition-colors">未登録</button>
+            {% endif %}
+          </td>
+
+          {# 車両 #}
+          <td class="px-4 py-3 align-top">
+            {% if day.vehicle_requests.all %}
+              <div class="flex flex-wrap gap-1.5">
+                {% for req in day.vehicle_requests.all %}
+                  <button type="button"
+                          title="車両申請を編集"
+                          hx-get="{% url 'productions:vehicle_requests_bulk_edit' day.id %}"
+                          hx-target="#modal"
+                          hx-swap="innerHTML"
+                          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 text-xs font-bold whitespace-nowrap ring-1 ring-sky-100 cursor-pointer hover:bg-sky-100 transition-colors">
+                    <i class="fa-solid fa-truck-front text-sky-300 text-[10px]"></i>
+                    {{ req.requested_vehicle.name }}
+                  </button>
+                {% endfor %}
+              </div>
+            {% else %}
+              <button type="button"
+                      title="車両申請を追加"
+                      hx-get="{% url 'productions:vehicle_requests_bulk_edit' day.id %}"
+                      hx-target="#modal"
+                      hx-swap="innerHTML"
+                      class="inline-flex items-center text-gray-400 italic text-xs border border-dashed border-gray-200 rounded-full px-2.5 py-1 cursor-pointer hover:bg-sky-50/50 transition-colors">未申請</button>
+            {% endif %}
+          </td>
+
+          {# 編集 #}
+          <td class="px-4 py-3 text-center">
+            <button type="button"
+                    hx-get="{% url 'productions:process_day_edit' day.id %}"
+                    hx-target="#modal"
+                    hx-swap="innerHTML"
+                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors whitespace-nowrap">
+              <i class="fa-solid fa-pen text-[10px]"></i> 編集
+            </button>
+          </td>
+
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -3,7 +3,7 @@
 {% block title %}{{ production.title }} - svr{% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto relative">
+<div class="max-w-md lg:max-w-7xl mx-auto relative">
   <!-- ヘッダー -->
   <div class="mb-6 flex items-start gap-4">
     <a href="{% url 'productions:list' %}" class="flex-none w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-100 text-gray-400 hover:text-indigo-600">
@@ -39,10 +39,16 @@
           <div class="flex-1 border-b-2 border-dashed border-gray-200 ml-2"></div>
         </div>
 
-        <div class="space-y-3">
+        {# モバイル: カードUI #}
+        <div class="space-y-3 lg:hidden">
           {% for day in group.days %}
             {% include "productions/partials/process_day_card.html" with day=day %}
           {% endfor %}
+        </div>
+
+        {# PC: テーブルUI #}
+        <div class="hidden lg:block">
+          {% include "productions/partials/process_day_table.html" with group=group %}
         </div>
       </section>
     {% empty %}

@@ -76,18 +76,52 @@
           </td>
 
           {# 車両 #}
-          <td class="px-4 py-3 align-top">
+          <td class="px-4 py-3 align-top min-w-[180px]">
             {% if day.vehicle_requests.all %}
-              <div class="flex flex-wrap gap-1.5">
+              <div class="flex flex-col gap-1.5">
                 {% for req in day.vehicle_requests.all %}
                   <button type="button"
                           title="車両申請を編集"
                           hx-get="{% url 'productions:vehicle_requests_bulk_edit' day.id %}"
                           hx-target="#modal"
                           hx-swap="innerHTML"
-                          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 text-xs font-bold whitespace-nowrap ring-1 ring-sky-100 cursor-pointer hover:bg-sky-100 transition-colors">
-                    <i class="fa-solid fa-truck-front text-sky-300 text-[10px]"></i>
-                    {{ req.requested_vehicle.name }}
+                          class="flex flex-col gap-0.5 px-3 py-2 rounded-lg bg-sky-50 ring-1 ring-sky-100 text-left cursor-pointer hover:bg-sky-100 transition-colors w-full">
+
+                    {# 行1: 車両名 + 申請種別 #}
+                    <span class="flex items-center gap-1.5">
+                      <i class="fa-solid fa-truck-front text-sky-400 text-[10px] flex-none"></i>
+                      <span class="text-xs font-bold text-sky-900 leading-tight">{{ req.requested_vehicle.name }}</span>
+                      <span class="text-[10px] text-sky-500 font-medium leading-tight">/ {{ req.get_request_kind_display }}</span>
+                    </span>
+
+                    {# 行2: 時間（どちらか一方でもあれば表示） #}
+                    {% if req.requested_time or req.arrival_requested_time %}
+                      <span class="flex items-center gap-1 text-[10px] leading-tight pl-3.5">
+                        {% if req.requested_time %}
+                          <span class="font-medium text-gray-600">{{ req.requested_time|time:"H:i" }}</span>
+                        {% endif %}
+                        <i class="fa-solid fa-arrow-right text-gray-300 text-[8px]"></i>
+                        {% if req.arrival_requested_time %}
+                          <span class="font-medium text-gray-600">{{ req.arrival_requested_time|time:"H:i" }}</span>
+                        {% endif %}
+                      </span>
+                    {% endif %}
+
+                    {# 行3: 場所（どちらか一方でもあれば表示） #}
+                    {% if req.route_from or req.route_to %}
+                      <span class="flex items-center gap-1 text-[10px] text-gray-400 leading-tight pl-3.5">
+                        {% if req.route_from %}
+                          <span>{{ req.route_from }}</span>
+                        {% endif %}
+                        {% if req.route_from or req.route_to %}
+                          <i class="fa-solid fa-arrow-right text-gray-300 text-[8px]"></i>
+                        {% endif %}
+                        {% if req.route_to %}
+                          <span>{{ req.route_to }}</span>
+                        {% endif %}
+                      </span>
+                    {% endif %}
+
                   </button>
                 {% endfor %}
               </div>

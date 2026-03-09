@@ -4,6 +4,7 @@ import pytest
 from django.contrib.auth.models import User
 from django.urls import reverse
 
+from apps.accounts.models import UserProfile
 from apps.productions.models import (
     Position,
     Process,
@@ -18,8 +19,10 @@ from apps.productions.models import (
 class TestStaffBulkEditUI:
     @pytest.fixture(autouse=True)
     def setup_data(self):
-        # テスト用ユーザー
+        # テスト用ユーザー（editor ロールで権限あり）
+        # post_save シグナルで UserProfile が自動生成されるため update で設定する
         self.user = User.objects.create_user(username='testuser', password='password')
+        UserProfile.objects.filter(user=self.user).update(system_role=UserProfile.SystemRole.EDITOR)
 
         # 公演データ
         self.production = Production.objects.create(
@@ -91,11 +94,13 @@ class TestStaffBulkEditUI:
         client.force_login(self.user)
         url = reverse('productions:staff_requests_bulk_edit', kwargs={'day_pk': self.day.id})
 
-        # 重複チェック
-        payload = [
-            {'position_id': self.pos_sound.id, 'quantity': 1},
-            {'position_id': self.pos_sound.id, 'quantity': 2},  # 重複
-        ]
+        # 不正 JSON はエラー再描画
+        response = client.post(url, {'requests_json': 'invalid-json'})
+        assert response.status_code == 200
+        assert 'データの形式が不正です'.encode() in response.content
+
+        # 数量 0 はエラー再描画
+        payload = [{'position_id': self.pos_sound.id, 'quantity': 0}]
         response = client.post(url, {'requests_json': json.dumps(payload)})
-        assert response.status_code == 200  # エラー時は再描画
-        assert '重複しています'.encode() in response.content
+        assert response.status_code == 200
+        assert '1名以上'.encode() in response.content

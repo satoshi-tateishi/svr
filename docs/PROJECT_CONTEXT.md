@@ -51,6 +51,7 @@ Django / Docker で、社内向けの **公演手配管理システム** を開�
 -   人員申請
 -   車両申請
 -   車両手配
+-   権限制御（Permission Service）
 
 ## performances
 
@@ -122,15 +123,39 @@ VehicleOperation（performances）
 
 * * *
 
+### 7. 権限制御
+
+`UserProfile.system_role`（システム全体）と `ProductionMember.role`（公演単位）の2層で制御。
+
+全判定ロジックは `productions/services/permissions.py` に集約。
+View には Mixin（`RequestEditPermissionMixin` / `AssignmentManagePermissionMixin`）経由で適用。
+HTMX リクエストには HTML 形式の 403 を返す（`permission_response.py`）。
+
+権限マトリクス：
+
+| 操作 | admin | editor | ProductionMember (SD/Chief) | general/viewer |
+|------|-------|--------|----------------------------|----------------|
+| 手配申請編集 | ✓ | ✓ | ✓ | ✗ |
+| 手配管理 | ✓ | ✓ | ✗ | ✗ |
+| コスト閲覧 | ✓ | ✓ | ✗ | ✗ |
+| 公演閲覧 | ✓ | ✓ | ✓ | ✓ |
+
+* * *
+
 # 開発フェーズ
 
 MVP実装後期。
 
-現在の主な作業：
+完了済み：
 
 -   管理UI改善
 -   PC表示の最適化
 -   手配管理機能の整備
+-   最小権限制御の導入（Permission Service / Mixin）
+
+現在の主な作業：
+
+-   手配担当者向け UI の構築
 
 * * *
 
@@ -424,6 +449,7 @@ hidden input JSON
 -   テンプレートから工程生成
 -   公演一覧レスポンシブUI
 -   公演詳細レスポンシブUI
+-   権限制御（Permission Service / Mixin）
 
 * * *
 
@@ -439,22 +465,26 @@ src
 
 詳細は以下。
 
-src  
-├── apps  
-│   ├── accounts  
-│   ├── performances  
-│   └── productions  
-│       ├── models.py  
-│       ├── views.py  
-│       ├── forms.py  
-│       └── templates  
-│           ├── partials  
-│           │   ├── process_day_card.html  
-│           │   ├── process_day_table.html  
-│           │   └── setup_block_card.html  
-│           ├── production_detail.html  
-│           ├── production_list.html  
-│           ├── production_setup.html  
+src
+├── apps
+│   ├── accounts
+│   ├── performances
+│   └── productions
+│       ├── models.py
+│       ├── views.py
+│       ├── forms.py
+│       ├── mixins.py
+│       ├── services/
+│       │   ├── permissions.py
+│       │   └── permission_response.py
+│       └── templates
+│           ├── partials
+│           │   ├── process_day_card.html
+│           │   ├── process_day_table.html
+│           │   └── setup_block_card.html
+│           ├── production_detail.html
+│           ├── production_list.html
+│           ├── production_setup.html
 │           └── vehicle_assignment_list.html
 
 * * *

@@ -15,6 +15,7 @@ from django.views.generic import CreateView, DetailView, ListView, View
 from apps.performances.models.vehicle import Vehicle
 
 from .forms import ProcessDayForm, ProductionMemberForm, StaffRequestForm, VehicleAssignmentForm
+from .mixins import AssignmentManagePermissionMixin, RequestEditPermissionMixin
 from .models import (
     Position,
     Process,
@@ -30,7 +31,7 @@ from .models import (
 from .templates import LOCATION_GROUPS, PRODUCTION_TEMPLATES
 
 
-class StaffRequestBulkEditView(LoginRequiredMixin, View):
+class StaffRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin, View):
     """人員手配の一括編集（モーダル用・Alpine.js使用）"""
 
     def get(self, request, day_pk):
@@ -215,7 +216,7 @@ class PreviousStaffRequestView(LoginRequiredMixin, View):
         )
 
 
-class VehicleRequestBulkEditView(LoginRequiredMixin, View):
+class VehicleRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin, View):
     """車両申請の一括編集（モーダル用・Alpine.js使用）"""
 
     def get(self, request, day_pk):
@@ -860,7 +861,7 @@ class ProcessDayCreateView(LoginRequiredMixin, View):
         )
 
 
-class VehicleAssignmentListView(LoginRequiredMixin, View):
+class VehicleAssignmentListView(AssignmentManagePermissionMixin, LoginRequiredMixin, View):
     """車両手配管理一覧"""
 
     def get(self, request, pk):
@@ -897,7 +898,7 @@ class VehicleAssignmentListView(LoginRequiredMixin, View):
         )
 
 
-class VehicleAssignmentEditView(LoginRequiredMixin, View):
+class VehicleAssignmentEditView(AssignmentManagePermissionMixin, LoginRequiredMixin, View):
     """車両手配の編集（モーダル用）"""
 
     def get(self, request, pk):

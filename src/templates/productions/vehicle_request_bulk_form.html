@@ -12,7 +12,11 @@
 
             this.requests = rawRequests.map(r => ({
                 requested_vehicle_id: r.requested_vehicle_id ? String(r.requested_vehicle_id) : '',
+                request_kind: r.request_kind || 'load_in',
                 requested_time: r.requested_time || '',
+                arrival_requested_time: r.arrival_requested_time || '',
+                route_from: r.route_from || '',
+                route_to: r.route_to || '',
                 note: r.note || ''
             }));
 
@@ -23,12 +27,46 @@
         addRow() {
             this.requests.push({
                 requested_vehicle_id: '',
+                request_kind: 'load_in',
                 requested_time: '',
+                arrival_requested_time: '',
+                route_from: '',
+                route_to: '',
                 note: ''
             });
         },
         removeRow(index) {
             this.requests.splice(index, 1);
+        },
+        /*
+         * 行複製メソッド。
+         * 申請種別の切り替え仕様：
+         *   load_in   → pickup    （搬入 ↔ 引き取り）
+         *   pickup    → load_in
+         *   loading   → unloading （荷積み ↔ 荷降ろし）
+         *   unloading → loading
+         *   other     → other（そのまま）
+         * 理由：同じ車両が往路・復路の両方を担うケースが多いため、
+         *   複製ボタン1回で対の種別が入った行が生まれ、修正なしに保存できる場合が多い。
+         * route_from / route_to はそのままコピーする（ルートは往復で共通のことが多い）。
+         */
+        duplicateRow(index) {
+            const src = this.requests[index];
+            const kindMap = {
+                load_in: 'pickup', pickup: 'load_in',
+                loading: 'unloading', unloading: 'loading'
+            };
+            const newKind = kindMap[src.request_kind] ?? src.request_kind;
+            const newRow = {
+                requested_vehicle_id: src.requested_vehicle_id,
+                request_kind: newKind,
+                requested_time: src.requested_time,
+                arrival_requested_time: src.arrival_requested_time,
+                route_from: src.route_from,
+                route_to: src.route_to,
+                note: src.note
+            };
+            this.requests.splice(index + 1, 0, newRow);
         },
         setMessage(msg, type = 'info') {
             this.statusMessage = msg;
@@ -51,12 +89,16 @@
         copyPrevious() {
             const hasInput = this.requests.some(r =>
                 (r.requested_vehicle_id && r.requested_vehicle_id !== '') ||
+                (r.requested_time && r.requested_time !== '') ||
+                (r.arrival_requested_time && r.arrival_requested_time !== '') ||
+                (r.route_from && r.route_from.trim() !== '') ||
+                (r.route_to && r.route_to.trim() !== '') ||
                 (r.note && r.note.trim() !== '')
             );
 
             if (!this.showConfirm && hasInput) {
                 this.showConfirm = true;
-                this.setMessage('現在入力中の内容は上書きされます。よろしければもう一度ボタンを押してください。', 'info');
+                this.setMessage('現在入力中の内容は上書きされます。直近の車両申請を読み込む場合は、もう一度ボタンを押してください。', 'info');
                 return;
             }
 
@@ -72,10 +114,14 @@
 
                     this.requests = data.requests.map(r => ({
                         requested_vehicle_id: String(r.requested_vehicle_id),
+                        request_kind: r.request_kind || 'load_in',
                         requested_time: r.requested_time || '',
+                        arrival_requested_time: r.arrival_requested_time || '',
+                        route_from: r.route_from || '',
+                        route_to: r.route_to || '',
                         note: r.note || ''
                     }));
-                    this.setMessage(`${data.source_date} の構成を読み込みました。`, 'info');
+                    this.setMessage(`${data.source_date} の車両申請を読み込みました。`, 'info');
                 })
                 .catch(err => {
                     this.showConfirm = false;
@@ -88,7 +134,11 @@
                 .filter(r => r.requested_vehicle_id !== '')
                 .map(r => ({
                     requested_vehicle_id: parseInt(r.requested_vehicle_id),
+                    request_kind: r.request_kind || 'load_in',
                     requested_time: r.requested_time || null,
+                    arrival_requested_time: r.arrival_requested_time || null,
+                    route_from: (r.route_from || '').trim(),
+                    route_to: (r.route_to || '').trim(),
                     note: (r.note || '').trim()
                 }));
         }
@@ -134,6 +184,16 @@
       {% csrf_token %}
       <input type="hidden" name="requests_json" :value="JSON.stringify(requests)">
 
+      {# 出発地・目的地の候補を共通 datalist 1つで管理 #}
+      <datalist id="route-location-options">
+        <option value="赤堤倉庫">
+        <option value="すみだ倉庫">
+        <option value="豪徳寺クローゼット">
+        <option value="経堂クローゼット">
+        <option value="稽古場">
+        <option value="劇場">
+      </datalist>
+
       <!-- エラーメッセージ (Django) -->
       {% if error_message %}
         <div class="mb-5 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-700">
@@ -162,13 +222,22 @@
       <div class="space-y-4 pb-4">
         <template x-for="(req, index) in requests" :key="index">
           <div class="group p-4 bg-gray-50 rounded-2xl border border-gray-100 transition-all hover:border-indigo-100 hover:bg-white hover:shadow-sm">
+            <!-- 行ヘッダー：番号 / 複製・削除ボタン -->
             <div class="flex items-center justify-between mb-3">
               <span class="text-[10px] font-black text-gray-300 uppercase tracking-tighter" x-text="'申請 #' + (index + 1)"></span>
-              <button type="button" @click="removeRow(index)" class="text-gray-300 hover:text-red-500 transition-colors p-1" title="行を削除">
-                <i class="fa-solid fa-trash-can text-sm"></i>
-              </button>
+              <div class="flex items-center gap-1">
+                <button type="button" @click="duplicateRow(index)"
+                        class="text-gray-300 hover:text-indigo-500 transition-colors p-1" title="行を複製">
+                  <i class="fa-solid fa-copy text-sm"></i>
+                </button>
+                <button type="button" @click="removeRow(index)"
+                        class="text-gray-300 hover:text-red-500 transition-colors p-1" title="行を削除">
+                  <i class="fa-solid fa-trash-can text-sm"></i>
+                </button>
+              </div>
             </div>
 
+            <!-- 1段目：申請車両 + 申請種別 -->
             <div class="grid grid-cols-2 gap-3">
               <!-- 申請車両 -->
               <div>
@@ -182,18 +251,60 @@
                 </select>
               </div>
 
-              <!-- 配車希望時間 -->
+              <!-- 申請種別 -->
               <div>
-                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">配車希望時間</label>
-                <input type="time" x-model="req.requested_time"
+                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">申請種別</label>
+                <select x-model="req.request_kind"
+                        class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5 bg-white">
+                  <option value="load_in">搬入</option>
+                  <option value="pickup">引き取り</option>
+                  <option value="loading">荷積み</option>
+                  <option value="unloading">荷降ろし</option>
+                  <option value="preload">積み置き</option>                                  
+                  <option value="other">その他</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 2段目：出発地 + 目的地 -->
+            <div class="grid grid-cols-2 gap-3 mt-3">
+              <!-- 出発地 -->
+              <div>
+                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">出発地 (任意)</label>
+                <input list="route-location-options"
+                       x-model="req.route_from"
+                       placeholder="倉庫名・稽古場名・劇場名など"
+                       class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5">
+              </div>
+
+              <!-- 目的地 -->
+              <div>
+                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">目的地 (任意)</label>
+                <input list="route-location-options"
+                       x-model="req.route_to"
+                       placeholder="倉庫名・稽古場名・劇場名など"
                        class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5">
               </div>
             </div>
 
-            <!-- 備考 -->
+            <!-- 3段目：配車希望時間 + 到着希望時間 -->
+            <div class="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">配車希望時間 (任意)</label>
+                <input type="time" x-model="req.requested_time"
+                       class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5">
+              </div>
+              <div>
+                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">到着希望時間 (任意)</label>
+                <input type="time" x-model="req.arrival_requested_time"
+                       class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5">
+              </div>
+            </div>
+
+            <!-- 4段目：備考 -->
             <div class="mt-3">
               <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">備考 (任意)</label>
-              <textarea x-model="req.note" rows="2" placeholder="例: 助手席にも人が乗る"
+              <textarea x-model="req.note" rows="2" placeholder="例: 搬入口着希望"
                         class="block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2.5"></textarea>
             </div>
           </div>
@@ -208,7 +319,7 @@
         </template>
       </div>
 
-      <!-- 前日コピーボタン -->
+      <!-- 直近コピーボタン -->
       <div class="mt-4 mb-2">
         <button type="button"
                 @click="copyPrevious()"
@@ -217,7 +328,7 @@
                     ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-lg shadow-amber-100'
                     : 'border-2 border-dashed border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/30'">
           <i class="fa-solid" :class="showConfirm ? 'fa-triangle-exclamation' : 'fa-copy'"></i>
-          <span x-text="showConfirm ? 'もう一度押すと上書きコピー' : '前日コピー'"></span>
+          <span x-text="showConfirm ? 'もう一度押すと上書きコピー' : '直近コピー'"></span>
         </button>
       </div>
 
@@ -227,6 +338,10 @@
                 class="w-full py-3.5 border-2 border-dashed border-gray-200 rounded-2xl text-xs font-black text-gray-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/30 transition-all flex items-center justify-center gap-2">
           <i class="fa-solid fa-plus"></i> 車両枠を追加
         </button>
+        <!-- UX 補足：搬入と引き取りを兼ねる場合は行を分けて登録 -->
+        <p class="mt-2 text-[10px] text-gray-400 text-center leading-relaxed">
+          ※ 搬入と引き取りを兼ねる場合は、目的ごとに行を分けて登録してください。
+        </p>
       </div>
 
       <!-- フッター -->

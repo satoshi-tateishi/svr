@@ -104,15 +104,43 @@
       <div class="space-y-1.5">
         {% for req in day.vehicle_requests.all %}
           <div onclick="event.stopPropagation()"
-               class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-transparent hover:border-indigo-100 transition-all cursor-pointer"
+               class="flex items-start p-2.5 bg-gray-50 rounded-xl border border-transparent hover:border-indigo-100 transition-all cursor-pointer"
                hx-get="{% url 'productions:vehicle_requests_bulk_edit' day.id %}"
                hx-target="#modal"
                hx-swap="innerHTML">
-            <div class="flex flex-col">
+            <div class="flex flex-col w-full">
+              {# 1行目: 車両名 #}
               <span class="text-xs font-bold text-gray-700">{{ req.requested_vehicle.name }}</span>
-              {% if req.requested_time %}
-                <span class="text-[10px] text-indigo-500 font-medium leading-tight mt-0.5">{{ req.requested_time|time:"H:i" }}</span>
+              {# 2行目: 申請種別のみ #}
+              <span class="text-[10px] text-indigo-500 font-medium leading-tight mt-0.5">{{ req.get_request_kind_display }}</span>
+              {# 時刻・地名を左右ブロック＋矢印で対応表示（片方欠損にも対応） #}
+              {% if req.requested_time or req.arrival_requested_time or req.route_from or req.route_to %}
+                <div class="grid grid-cols-[1fr_auto_1fr] gap-x-1.5 items-center mt-1.5">
+                  {# 左ブロック: 配車希望時間 + 出発地 #}
+                  <div class="bg-white rounded-lg border border-gray-100 shadow-sm px-2 py-1.5 flex flex-col gap-0.5">
+                    {% if req.requested_time %}
+                      <span class="text-[11px] font-bold text-gray-600 leading-tight">配車 {{ req.requested_time|time:"H:i" }}</span>
+                    {% endif %}
+                    {% if req.route_from %}
+                      <span class="text-[10px] text-gray-400 leading-tight">{{ req.route_from }}</span>
+                    {% endif %}
+                  </div>
+                  {# 中央: 矢印アイコン #}
+                  <div class="flex items-center justify-center">
+                    <i class="fa-solid fa-arrow-right text-[10px] text-gray-300"></i>
+                  </div>
+                  {# 右ブロック: 到着希望時間 + 目的地 #}
+                  <div class="bg-white rounded-lg border border-gray-100 shadow-sm px-2 py-1.5 flex flex-col gap-0.5">
+                    {% if req.arrival_requested_time %}
+                      <span class="text-[11px] font-bold text-gray-600 leading-tight">着 {{ req.arrival_requested_time|time:"H:i" }}</span>
+                    {% endif %}
+                    {% if req.route_to %}
+                      <span class="text-[10px] text-gray-400 leading-tight">{{ req.route_to }}</span>
+                    {% endif %}
+                  </div>
+                </div>
               {% endif %}
+              {# note #}
               {% if req.note %}
                 <span class="text-[10px] text-gray-400 leading-tight mt-0.5">{{ req.note }}</span>
               {% endif %}

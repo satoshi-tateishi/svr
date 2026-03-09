@@ -176,12 +176,24 @@ class VehicleRequestBulkEditView(LoginRequiredMixin, View):
         day = get_object_or_404(ProcessDay, pk=day_pk)
         # 既存の申請を取得（初期値）
         raw_requests = day.vehicle_requests.all().values(
-            'requested_vehicle_id', 'requested_time', 'note'
+            'requested_vehicle_id',
+            'request_kind',
+            'requested_time',
+            'arrival_requested_time',
+            'route_from',
+            'route_to',
+            'note',
         )
         requests_data = [
             {
                 'requested_vehicle_id': r['requested_vehicle_id'],
+                'request_kind': r['request_kind'],
                 'requested_time': str(r['requested_time'])[:5] if r['requested_time'] else '',
+                'arrival_requested_time': (
+                    str(r['arrival_requested_time'])[:5] if r['arrival_requested_time'] else ''
+                ),
+                'route_from': r['route_from'],
+                'route_to': r['route_to'],
                 'note': r['note'],
             }
             for r in raw_requests
@@ -222,6 +234,7 @@ class VehicleRequestBulkEditView(LoginRequiredMixin, View):
 
         # 有効行の抽出とバリデーション
         valid_items = []
+        valid_request_kinds = {c[0] for c in VehicleRequest.RequestKind.choices}
 
         for item in submitted_data:
             raw_vehicle_id = item.get('requested_vehicle_id')
@@ -238,11 +251,22 @@ class VehicleRequestBulkEditView(LoginRequiredMixin, View):
                 error_context['error_message'] = f'不正な車両IDです (ID:{vehicle_id})。'
                 return render(request, 'productions/vehicle_request_bulk_form.html', error_context)
 
+            # request_kind のバリデーション：未指定は load_in、不正値はエラー
+            raw_kind = item.get('request_kind') or VehicleRequest.RequestKind.LOAD_IN
+            if raw_kind not in valid_request_kinds:
+                error_context['error_message'] = f'申請種別の値が不正です（{raw_kind}）。'
+                return render(request, 'productions/vehicle_request_bulk_form.html', error_context)
+
             raw_time = item.get('requested_time') or None
+            raw_arrival_time = item.get('arrival_requested_time') or None
             valid_items.append(
                 {
                     'requested_vehicle_id': vehicle_id,
+                    'request_kind': raw_kind,
                     'requested_time': raw_time if raw_time else None,
+                    'arrival_requested_time': raw_arrival_time if raw_arrival_time else None,
+                    'route_from': (item.get('route_from') or '').strip(),
+                    'route_to': (item.get('route_to') or '').strip(),
                     'note': (item.get('note') or '').strip(),
                 }
             )
@@ -255,7 +279,11 @@ class VehicleRequestBulkEditView(LoginRequiredMixin, View):
                     VehicleRequest(
                         process_day=day,
                         requested_vehicle_id=item['requested_vehicle_id'],
+                        request_kind=item['request_kind'],
                         requested_time=item['requested_time'],
+                        arrival_requested_time=item['arrival_requested_time'],
+                        route_from=item['route_from'],
+                        route_to=item['route_to'],
                         note=item['note'],
                     )
                     for item in valid_items
@@ -269,17 +297,20 @@ class VehicleRequestBulkEditView(LoginRequiredMixin, View):
 
 
 class PreviousVehicleRequestView(LoginRequiredMixin, View):
-    """前日の車両申請を取得する（JSON用）"""
+    """直近の車両申請を取得する（JSON用）"""
 
     def get(self, request, day_pk):
         day = get_object_or_404(ProcessDay, pk=day_pk)
 
-        # 同一 Production 内で現在の日付より前、かつ最も近い日付の ProcessDay を取得
+        # 同一 Production 内で現在日より前かつ車両申請が1件以上ある、最も近い ProcessDay を取得
+        # vehicle_requests__isnull=False で申請ありの日だけに絞り、distinct() で重複除去
         previous_day = (
             ProcessDay.objects.filter(
                 process__production=day.process.production,
                 date__lt=day.date,
+                vehicle_requests__isnull=False,
             )
+            .distinct()
             .order_by('-date', '-id')
             .first()
         )
@@ -289,13 +320,23 @@ class PreviousVehicleRequestView(LoginRequiredMixin, View):
 
         raw_requests = previous_day.vehicle_requests.all().values(
             'requested_vehicle_id',
+            'request_kind',
             'requested_time',
+            'arrival_requested_time',
+            'route_from',
+            'route_to',
             'note',
         )
         requests_data = [
             {
                 'requested_vehicle_id': r['requested_vehicle_id'],
+                'request_kind': r['request_kind'],
                 'requested_time': str(r['requested_time'])[:5] if r['requested_time'] else '',
+                'arrival_requested_time': (
+                    str(r['arrival_requested_time'])[:5] if r['arrival_requested_time'] else ''
+                ),
+                'route_from': r['route_from'],
+                'route_to': r['route_to'],
                 'note': r['note'],
             }
             for r in raw_requests

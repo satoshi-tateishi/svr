@@ -228,6 +228,14 @@ class StaffRequest(models.Model):
 class VehicleRequest(models.Model):
     """車両申請"""
 
+    class RequestKind(models.TextChoices):
+        LOAD_IN = 'load_in', '搬入'
+        PICKUP = 'pickup', '引き取り'
+        LOADING = 'loading', '荷積み'
+        PRELOAD = 'preload', '積み置き'
+        UNLOADING = 'unloading', '荷降ろし'
+        OTHER = 'other', 'その他'
+
     process_day = models.ForeignKey(
         ProcessDay,
         on_delete=models.CASCADE,
@@ -240,7 +248,16 @@ class VehicleRequest(models.Model):
         related_name='production_vehicle_requests',
         verbose_name='申請車両',
     )
+    request_kind = models.CharField(
+        max_length=20,
+        choices=RequestKind.choices,
+        default=RequestKind.LOAD_IN,
+        verbose_name='申請種別',
+    )
     requested_time = models.TimeField(null=True, blank=True, verbose_name='配車希望時間')
+    arrival_requested_time = models.TimeField(null=True, blank=True, verbose_name='到着希望時間')
+    route_from = models.CharField(max_length=200, blank=True, default='', verbose_name='出発地')
+    route_to = models.CharField(max_length=200, blank=True, default='', verbose_name='目的地')
     note = models.TextField(blank=True, default='', verbose_name='備考')
 
     class Meta:

@@ -33,7 +33,19 @@ class StaffRequestBulkEditView(LoginRequiredMixin, View):
     def get(self, request, day_pk):
         day = get_object_or_404(ProcessDay, pk=day_pk)
         # 既存の手配を取得（初期値）
-        requests_data = list(day.staff_requests.all().values('position_id', 'quantity', 'note'))
+        raw_requests = day.staff_requests.all().values(
+            'position_id', 'quantity', 'start_time', 'end_time', 'note'
+        )
+        requests_data = [
+            {
+                'position_id': r['position_id'],
+                'quantity': r['quantity'],
+                'start_time': str(r['start_time'])[:5] if r['start_time'] else '',
+                'end_time': str(r['end_time'])[:5] if r['end_time'] else '',
+                'note': r['note'],
+            }
+            for r in raw_requests
+        ]
         # ポジションマスタ
         positions = Position.objects.all().order_by('order')
 
@@ -69,9 +81,8 @@ class StaffRequestBulkEditView(LoginRequiredMixin, View):
             error_context['error_message'] = 'データの形式が不正です。'
             return render(request, 'productions/staff_request_bulk_form.html', error_context)
 
-        # 1. 有効な行のみ抽出（ポジション未選択の行は無視）
+        # 1. 有効な行のみ抽出・バリデーション（ポジション未選択の行は無視）
         valid_items = []
-        seen_positions = set()
 
         for item in submitted_data:
             raw_pos_id = item.get('position_id')
@@ -85,17 +96,10 @@ class StaffRequestBulkEditView(LoginRequiredMixin, View):
                 error_context['error_message'] = '入力内容が不正です。'
                 return render(request, 'productions/staff_request_bulk_form.html', error_context)
 
-            # ポジションの実在確認 (メモリ内セットで高速検証)
+            # ポジションの実在確認
             if pos_id not in valid_position_ids:
                 error_context['error_message'] = f'不正なポジションIDです (ID:{pos_id})。'
                 return render(request, 'productions/staff_request_bulk_form.html', error_context)
-
-            # 重複チェック
-            if pos_id in seen_positions:
-                name = position_map.get(pos_id, f'ID:{pos_id}')
-                error_context['error_message'] = f'ポジション「{name}」が重複しています。'
-                return render(request, 'productions/staff_request_bulk_form.html', error_context)
-            seen_positions.add(pos_id)
 
             # 数量チェック
             if qty < 1:
@@ -103,23 +107,52 @@ class StaffRequestBulkEditView(LoginRequiredMixin, View):
                 error_context['error_message'] = f'「{pos_name}」は1名以上で入力してください。'
                 return render(request, 'productions/staff_request_bulk_form.html', error_context)
 
+            # 時間帯のパース
+            raw_start = (item.get('start_time') or '').strip() or None
+            raw_end = (item.get('end_time') or '').strip() or None
+
+            pos_name = position_map.get(pos_id)
+
+            # end_time のみ入力はエラー
+            if raw_end and not raw_start:
+                error_context['error_message'] = (
+                    f'「{pos_name}」：終了時間のみの入力はできません。開始時間も入力してください。'
+                )
+                return render(request, 'productions/staff_request_bulk_form.html', error_context)
+
+            # start_time > end_time はエラー
+            if raw_start and raw_end and raw_start >= raw_end:
+                error_context['error_message'] = (
+                    f'「{pos_name}」：開始時間は終了時間より前にしてください。'
+                )
+                return render(request, 'productions/staff_request_bulk_form.html', error_context)
+
             valid_items.append(
-                {'position_id': pos_id, 'quantity': qty, 'note': (item.get('note') or '').strip()}
+                {
+                    'position_id': pos_id,
+                    'quantity': qty,
+                    'start_time': raw_start,
+                    'end_time': raw_end,
+                    'note': (item.get('note') or '').strip(),
+                }
             )
 
-        # 2. 保存処理（トランザクション）
+        # 2. 保存処理（全削除 → bulk_create で一括置換）
         with transaction.atomic():
-            # JSONに含まれない既存レコードを削除（同期）
-            incoming_position_ids = [item['position_id'] for item in valid_items]
-            day.staff_requests.exclude(position_id__in=incoming_position_ids).delete()
-
-            # 各項目の更新または作成
-            for item in valid_items:
-                StaffRequest.objects.update_or_create(
-                    process_day=day,
-                    position_id=item['position_id'],
-                    defaults={'quantity': item['quantity'], 'note': item['note']},
-                )
+            day.staff_requests.all().delete()
+            StaffRequest.objects.bulk_create(
+                [
+                    StaffRequest(
+                        process_day=day,
+                        position_id=item['position_id'],
+                        quantity=item['quantity'],
+                        start_time=item['start_time'],
+                        end_time=item['end_time'],
+                        note=item['note'],
+                    )
+                    for item in valid_items
+                ]
+            )
 
         # 3. 成功時は全体リダイレクト
         response = HttpResponse()
@@ -152,14 +185,24 @@ class PreviousStaffRequestView(LoginRequiredMixin, View):
                 }
             )
 
-        # その日の StaffRequest を取得
-        requests_data = list(
-            previous_day.staff_requests.all().values(
-                'position_id',
-                'quantity',
-                'note',
-            )
+        # その日の StaffRequest を取得（start_time / end_time を含む）
+        raw_requests = previous_day.staff_requests.all().values(
+            'position_id',
+            'quantity',
+            'start_time',
+            'end_time',
+            'note',
         )
+        requests_data = [
+            {
+                'position_id': r['position_id'],
+                'quantity': r['quantity'],
+                'start_time': str(r['start_time'])[:5] if r['start_time'] else '',
+                'end_time': str(r['end_time'])[:5] if r['end_time'] else '',
+                'note': r['note'],
+            }
+            for r in raw_requests
+        ]
 
         return JsonResponse(
             {

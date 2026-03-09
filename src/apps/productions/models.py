@@ -213,13 +213,17 @@ class StaffRequest(models.Model):
 
     quantity = models.PositiveIntegerField(default=1, verbose_name='必要人数')
 
+    # 空欄の場合は工程時間（ProcessDay の start_time / end_time）に準ずる
+    start_time = models.TimeField(null=True, blank=True, verbose_name='開始時間')
+    end_time = models.TimeField(null=True, blank=True, verbose_name='終了時間')
+
     note = models.TextField(blank=True, verbose_name='備考')
 
     class Meta:
         verbose_name = '人員申請'
         verbose_name_plural = '人員申請'
-        # 同一工程タスク・同一ポジションの重複を禁止
-        unique_together = ['process_day', 'position']
+        # 同一ポジションを時間帯別に複数申請できるため unique_together は設けない
+        ordering = ['position__order', 'start_time']
 
     def __str__(self):
         return f'{self.position.name} x {self.quantity}'

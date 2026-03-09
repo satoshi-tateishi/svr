@@ -9,12 +9,14 @@
         init() {
             const initialData = document.getElementById('initial-requests-data').textContent;
             const rawRequests = JSON.parse(initialData || '[]');
-            
+
             this.requests = rawRequests.map(r => ({
                 ...r,
-                position_id: r.position_id ? String(r.position_id) : ''
+                position_id: r.position_id ? String(r.position_id) : '',
+                start_time: r.start_time ?? '',
+                end_time: r.end_time ?? ''
             }));
-            
+
             if (this.requests.length === 0) {
                 this.addRow();
             }
@@ -23,6 +25,8 @@
             this.requests.push({
                 position_id: '',
                 quantity: 1,
+                start_time: '',
+                end_time: '',
                 note: ''
             });
         },
@@ -48,10 +52,12 @@
             }
         },
         copyPrevious() {
-            const hasInput = this.requests.some(r => 
-                (r.position_id && r.position_id !== '') || 
-                (r.note && r.note.trim() !== '') || 
-                (parseInt(r.quantity) || 0) > 1
+            const hasInput = this.requests.some(r =>
+                (r.position_id && r.position_id !== '') ||
+                (r.note && r.note.trim() !== '') ||
+                (parseInt(r.quantity) || 0) > 1 ||
+                (r.start_time && r.start_time !== '') ||
+                (r.end_time && r.end_time !== '')
             );
 
             if (!this.showConfirm && hasInput) {
@@ -72,7 +78,9 @@
                     
                     this.requests = data.requests.map(r => ({
                         ...r,
-                        position_id: String(r.position_id)
+                        position_id: String(r.position_id),
+                        start_time: r.start_time ?? '',
+                        end_time: r.end_time ?? ''
                     }));
                     this.setMessage(`${data.source_date} の構成を読み込みました。`, 'info');
                 })
@@ -172,7 +180,7 @@
               <!-- ポジション -->
               <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">ポジション</label>
-                <select x-model="req.position_id" 
+                <select x-model="req.position_id"
                         class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5 bg-white">
                   <option value="">-- 選択してください --</option>
                   {% for pos in positions %}
@@ -190,6 +198,28 @@
                   <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                     <span class="text-gray-400 text-[10px] font-black uppercase">名</span>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 時間帯 -->
+            <div class="mt-3">
+              <div class="flex items-center gap-1.5 mb-1.5 ml-1">
+                <label class="text-[10px] font-black text-gray-400 uppercase">時間帯（任意）</label>
+                <span class="text-[10px] text-gray-300 font-medium">空欄 = 工程時間に準ずる</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[10px] text-gray-400 mb-1 ml-1">開始時間</label>
+                  <input type="time" x-model="req.start_time"
+                         @focus="if (!req.start_time) req.start_time = '09:00'"
+                         class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5">
+                </div>
+                <div>
+                  <label class="block text-[10px] text-gray-400 mb-1 ml-1">終了時間</label>
+                  <input type="time" x-model="req.end_time"
+                         @focus="if (!req.end_time) req.end_time = '21:00'"
+                         class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5">
                 </div>
               </div>
             </div>

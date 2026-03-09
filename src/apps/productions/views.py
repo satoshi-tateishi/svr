@@ -1,9 +1,10 @@
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from itertools import groupby
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import User
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -13,15 +14,17 @@ from django.views.generic import CreateView, DetailView, ListView, View
 
 from apps.performances.models.vehicle import Vehicle
 
-from .forms import ProcessDayForm, StaffRequestForm
+from .forms import ProcessDayForm, ProductionMemberForm, StaffRequestForm, VehicleAssignmentForm
 from .models import (
     Position,
     Process,
     ProcessDay,
     ProcessType,
     Production,
+    ProductionMember,
     ProductionTemplate,
     StaffRequest,
+    VehicleAssignment,
     VehicleRequest,
 )
 from .templates import LOCATION_GROUPS, PRODUCTION_TEMPLATES
@@ -461,7 +464,36 @@ class ProductionListView(LoginRequiredMixin, ListView):
     model = Production
     template_name = 'productions/production_list.html'
     context_object_name = 'productions'
-    ordering = ['-start_date']
+
+    def get_queryset(self):
+        from django.db.models import F, Max, Min, Prefetch
+        from django.db.models.functions import Coalesce
+
+        sound_designer_prefetch = Prefetch(
+            'members',
+            queryset=ProductionMember.objects.filter(role=ProductionMember.Role.SOUND_DESIGNER)
+            .select_related('user', 'user__profile')
+            .order_by('created_at'),
+            to_attr='sound_designer_list',
+        )
+        chief_prefetch = Prefetch(
+            'members',
+            queryset=ProductionMember.objects.filter(role=ProductionMember.Role.CHIEF)
+            .select_related('user', 'user__profile')
+            .order_by('created_at'),
+            to_attr='chief_list',
+        )
+        return (
+            Production.objects.annotate(
+                process_min_date=Min('processes__days__date'),
+                process_max_date=Max('processes__days__date'),
+                # ソート用: ProcessDay がある場合はその最小日付、なければ start_date
+                effective_start_date=Coalesce('process_min_date', 'start_date'),
+            )
+            .select_related('created_by', 'created_by__profile')
+            .prefetch_related(sound_designer_prefetch, chief_prefetch)
+            .order_by(F('effective_start_date').desc(nulls_last=True))
+        )
 
 
 class ProductionCreateView(LoginRequiredMixin, CreateView):
@@ -471,13 +503,64 @@ class ProductionCreateView(LoginRequiredMixin, CreateView):
     fields = ['title', 'start_date', 'end_date', 'note']
     template_name = 'productions/production_form.html'
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from apps.accounts.models import UserProfile
+
+        active_user_ids = UserProfile.objects.filter(is_active_staff=True).values_list(
+            'user_id', flat=True
+        )
+        ctx['users'] = (
+            User.objects.filter(pk__in=active_user_ids)
+            .select_related('profile')
+            .order_by('profile__order', 'last_name', 'first_name')
+        )
+        # バリデーションエラー後の再表示時に選択値を保持する
+        ctx['selected_sound_designer_id'] = self.request.POST.get('sound_designer_id', '')
+        ctx['selected_chief_id'] = self.request.POST.get('chief_id', '')
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self.object = None
+        form = self.get_form()
+        if form.is_valid():
+            # 担当者バリデーション（ModelForm の外側フィールドなので個別チェック）
+            sound_designer_id = request.POST.get('sound_designer_id', '').strip()
+            chief_id = request.POST.get('chief_id', '').strip()
+            if not sound_designer_id and not chief_id:
+                ctx = self.get_context_data(form=form)
+                ctx['member_error'] = (
+                    'サウンドデザイナーまたはチーフを少なくとも1人選択してください。'
+                )
+                return self.render_to_response(ctx)
+            return self.form_valid(form)
+        return self.form_invalid(form)
+
     def form_valid(self, form):
         form.instance.created_by = self.request.user
         today_str = timezone.now().strftime('%Y%m%d')
         base_code = f'P-{today_str}'
         count = Production.objects.filter(code__startswith=base_code).count() + 1
         form.instance.code = f'{base_code}-{count:03d}'
-        return super().form_valid(form)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            # 担当者の自動生成（選択されている場合のみ）
+            production = self.object
+            for role_value, field_name in [
+                (ProductionMember.Role.SOUND_DESIGNER, 'sound_designer_id'),
+                (ProductionMember.Role.CHIEF, 'chief_id'),
+            ]:
+                user_id_str = self.request.POST.get(field_name, '').strip()
+                if user_id_str:
+                    try:
+                        ProductionMember.objects.create(
+                            production=production,
+                            user_id=int(user_id_str),
+                            role=role_value,
+                        )
+                    except (ValueError, TypeError):
+                        pass  # 不正な値は無視（通常は発生しない）
+        return response
 
     def get_success_url(self):
         return reverse('productions:setup', kwargs={'pk': self.object.pk})
@@ -492,7 +575,8 @@ class ProductionDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        process_days = (
+        # process_days をリスト化して1回のクエリで評価
+        process_days_list = list(
             ProcessDay.objects.filter(process__production=self.object)
             .select_related('process', 'process_type')
             .prefetch_related(
@@ -504,11 +588,24 @@ class ProductionDetailView(LoginRequiredMixin, DetailView):
             .order_by('date', 'order', 'start_time')
         )
 
+        # ProcessDay の min/max を production に注入（actual_start/end_date の DB クエリを防ぐ）
+        dates = [d.date for d in process_days_list]
+        self.object.process_min_date = min(dates) if dates else None
+        self.object.process_max_date = max(dates) if dates else None
+
         grouped_days = []
-        for date, group in groupby(process_days, key=lambda x: x.date):
-            grouped_days.append({'date': date, 'days': list(group)})
+        for day_date, group in groupby(process_days_list, key=lambda x: x.date):
+            grouped_days.append({'date': day_date, 'days': list(group)})
 
         context['grouped_days'] = grouped_days
+
+        # 担当者一覧（Role.choices 定義順で並べるため Python 側でソート）
+        role_order = {role: idx for idx, (role, _) in enumerate(ProductionMember.Role.choices)}
+        members_qs = self.object.members.select_related('user', 'user__profile')
+        context['members'] = sorted(
+            members_qs,
+            key=lambda m: (role_order.get(m.role, 99), m.start_date or date.min),
+        )
         return context
 
 
@@ -761,3 +858,285 @@ class ProcessDayCreateView(LoginRequiredMixin, View):
             'productions/process_day_form.html',
             {'production': production, 'form': form, 'is_create': True},
         )
+
+
+class VehicleAssignmentListView(LoginRequiredMixin, View):
+    """車両手配管理一覧"""
+
+    def get(self, request, pk):
+        production = get_object_or_404(Production, pk=pk)
+        # 配下の全 VehicleRequest に対して管理レコードを自動生成（初回アクセス時）
+        vehicle_requests = VehicleRequest.objects.filter(
+            process_day__process__production=production
+        ).select_related('process_day__process', 'requested_vehicle')
+        for vr in vehicle_requests:
+            VehicleAssignment.objects.get_or_create(vehicle_request=vr)
+
+        assignments = (
+            VehicleAssignment.objects.filter(
+                vehicle_request__process_day__process__production=production
+            )
+            .select_related(
+                'vehicle_request__process_day__process',
+                'vehicle_request__process_day__process_type',
+                'vehicle_request__requested_vehicle',
+                'assigned_vehicle',
+            )
+            .order_by(
+                'vehicle_request__process_day__date',
+                'vehicle_request__requested_time',
+            )
+        )
+        return render(
+            request,
+            'productions/vehicle_assignment_list.html',
+            {
+                'production': production,
+                'assignments': assignments,
+            },
+        )
+
+
+class VehicleAssignmentEditView(LoginRequiredMixin, View):
+    """車両手配の編集（モーダル用）"""
+
+    def get(self, request, pk):
+        vr = get_object_or_404(VehicleRequest, pk=pk)
+        assignment, _ = VehicleAssignment.objects.get_or_create(vehicle_request=vr)
+        form = VehicleAssignmentForm(instance=assignment)
+        return render(
+            request,
+            'productions/vehicle_assignment_form.html',
+            {'vr': vr, 'assignment': assignment, 'form': form},
+        )
+
+    def post(self, request, pk):
+        vr = get_object_or_404(VehicleRequest, pk=pk)
+        assignment, _ = VehicleAssignment.objects.get_or_create(vehicle_request=vr)
+        form = VehicleAssignmentForm(request.POST, instance=assignment)
+        if form.is_valid():
+            form.save()
+            response = HttpResponse()
+            response['HX-Redirect'] = reverse(
+                'productions:vehicle_assignment_list',
+                kwargs={'pk': vr.process_day.process.production_id},
+            )
+            return response
+        return render(
+            request,
+            'productions/vehicle_assignment_form.html',
+            {
+                'vr': vr,
+                'assignment': assignment,
+                'form': form,
+                'error_message': 'エラーが発生しました。入力内容を確認してください。',
+            },
+        )
+
+
+class ProductionMemberEditView(LoginRequiredMixin, View):
+    """公演担当者の追加・編集（モーダル用）"""
+
+    def get(self, request, production_pk=None, pk=None):
+        if pk:
+            member = get_object_or_404(ProductionMember, pk=pk)
+            production = member.production
+        else:
+            production = get_object_or_404(Production, pk=production_pk)
+            member = None
+        form = ProductionMemberForm(instance=member)
+        return render(
+            request,
+            'productions/production_member_form.html',
+            {'production': production, 'member': member, 'form': form},
+        )
+
+    def post(self, request, production_pk=None, pk=None):
+        if pk:
+            member = get_object_or_404(ProductionMember, pk=pk)
+            production = member.production
+        else:
+            production = get_object_or_404(Production, pk=production_pk)
+            member = None
+        form = ProductionMemberForm(request.POST, instance=member)
+        if form.is_valid():
+            m = form.save(commit=False)
+            if not pk:
+                m.production = production
+            m.save()
+            response = HttpResponse()
+            response['HX-Redirect'] = reverse('productions:detail', kwargs={'pk': production.pk})
+            return response
+        return render(
+            request,
+            'productions/production_member_form.html',
+            {
+                'production': production,
+                'member': member,
+                'form': form,
+                'error_message': 'エラーが発生しました。入力内容を確認してください。',
+            },
+        )
+
+
+class ProductionMemberDeleteView(LoginRequiredMixin, View):
+    """公演担当者の削除"""
+
+    # 申請可能ロール（将来の権限制御で申請できるロールと必ず一致させること）
+    APPLICABLE_ROLES = {
+        ProductionMember.Role.SOUND_DESIGNER,
+        ProductionMember.Role.CHIEF,
+    }
+
+    def post(self, request, pk):
+        member = get_object_or_404(ProductionMember, pk=pk)
+        production_pk = member.production_id
+
+        # 削除後に申請可能担当者が0人になる場合は削除禁止
+        if member.role in self.APPLICABLE_ROLES:
+            remaining = (
+                ProductionMember.objects.filter(
+                    production_id=production_pk,
+                    role__in=self.APPLICABLE_ROLES,
+                )
+                .exclude(pk=pk)
+                .count()
+            )
+            if remaining == 0:
+                form = ProductionMemberForm(instance=member)
+                return render(
+                    request,
+                    'productions/production_member_form.html',
+                    {
+                        'member': member,
+                        'production': member.production,
+                        'form': form,
+                        'error_message': (
+                            'この担当者を削除すると、申請可能な担当者'
+                            '（サウンドデザイナーまたはチーフ）がいなくなるため削除できません。'
+                        ),
+                    },
+                )
+
+        # NOTE: 現在は物理削除。将来 end_date 運用 / 論理削除に移行する場合は
+        #       ここを `member.end_date = date.today(); member.save()` 等に変更する。
+        member.delete()
+        response = HttpResponse()
+        response['HX-Redirect'] = reverse('productions:detail', kwargs={'pk': production_pk})
+        return response
+
+
+class ProductionMemberBulkAddView(LoginRequiredMixin, View):
+    """公演担当者の一括追加（モーダル用・Alpine.js）"""
+
+    def _get_users_and_roles(self):
+        """共通: アクティブユーザーと役割一覧を返す"""
+        from apps.accounts.models import UserProfile
+
+        active_user_ids = UserProfile.objects.filter(is_active_staff=True).values_list(
+            'user_id', flat=True
+        )
+        users = (
+            User.objects.filter(pk__in=active_user_ids)
+            .select_related('profile')
+            .order_by('profile__order', 'last_name', 'first_name')
+        )
+        return users, active_user_ids, ProductionMember.Role.choices
+
+    def get(self, request, production_pk):
+        production = get_object_or_404(Production, pk=production_pk)
+        users, _, roles = self._get_users_and_roles()
+        return render(
+            request,
+            'productions/production_member_bulk_form.html',
+            {'production': production, 'users': users, 'roles': roles},
+        )
+
+    def post(self, request, production_pk):
+        production = get_object_or_404(Production, pk=production_pk)
+        users, active_user_ids, roles = self._get_users_and_roles()
+        error_context = {'production': production, 'users': users, 'roles': roles}
+
+        try:
+            submitted = json.loads(request.POST.get('members_json', '[]'))
+        except json.JSONDecodeError:
+            error_context['error_message'] = 'データの形式が不正です。'
+            return render(request, 'productions/production_member_bulk_form.html', error_context)
+
+        valid_user_ids = set(active_user_ids)
+        valid_roles = {r[0] for r in ProductionMember.Role.choices}
+        valid_items = []
+
+        for i, item in enumerate(submitted):
+            user_id = item.get('user_id') or ''
+            role = item.get('role') or ''
+            # 両方空 → 完全空行なので無視
+            if not user_id and not role:
+                continue
+            if not user_id:
+                error_context['error_message'] = f'{i + 1} 行目：担当者を選択してください。'
+                return render(
+                    request, 'productions/production_member_bulk_form.html', error_context
+                )
+            if not role:
+                error_context['error_message'] = f'{i + 1} 行目：役割を選択してください。'
+                return render(
+                    request, 'productions/production_member_bulk_form.html', error_context
+                )
+            try:
+                user_id_int = int(user_id)
+            except (ValueError, TypeError):
+                error_context['error_message'] = f'{i + 1} 行目：担当者の値が不正です。'
+                return render(
+                    request, 'productions/production_member_bulk_form.html', error_context
+                )
+            if user_id_int not in valid_user_ids:
+                error_context['error_message'] = f'{i + 1} 行目：不正な担当者です。'
+                return render(
+                    request, 'productions/production_member_bulk_form.html', error_context
+                )
+            if role not in valid_roles:
+                error_context['error_message'] = f'{i + 1} 行目：不正な役割です。'
+                return render(
+                    request, 'productions/production_member_bulk_form.html', error_context
+                )
+            raw_start = (item.get('start_date') or '').strip() or None
+            raw_end = (item.get('end_date') or '').strip() or None
+            if raw_start and raw_end and raw_start > raw_end:
+                error_context['error_message'] = (
+                    f'{i + 1} 行目：担当開始日は終了日より前にしてください。'
+                )
+                return render(
+                    request, 'productions/production_member_bulk_form.html', error_context
+                )
+            valid_items.append(
+                {
+                    'user_id': user_id_int,
+                    'role': role,
+                    'start_date': raw_start,
+                    'end_date': raw_end,
+                    'note': (item.get('note') or '').strip(),
+                }
+            )
+
+        if not valid_items:
+            error_context['error_message'] = '少なくとも1名の担当者を入力してください。'
+            return render(request, 'productions/production_member_bulk_form.html', error_context)
+
+        ProductionMember.objects.bulk_create(
+            [
+                ProductionMember(
+                    production=production,
+                    user_id=item['user_id'],
+                    role=item['role'],
+                    start_date=item['start_date'],
+                    end_date=item['end_date'],
+                    note=item['note'],
+                )
+                for item in valid_items
+            ]
+        )
+
+        response = HttpResponse()
+        response['HX-Redirect'] = reverse('productions:detail', kwargs={'pk': production.pk})
+        return response

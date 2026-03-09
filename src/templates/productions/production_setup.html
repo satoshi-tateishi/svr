@@ -24,7 +24,7 @@
       <div class="font-bold text-indigo-900">{{ production.title }}</div>
       <div class="text-xs text-indigo-700 mt-1 flex items-center gap-1">
         <i class="fa-regular fa-calendar"></i>
-        {{ production.start_date|date:"Y/m/d" }} 〜 {{ production.end_date|date:"m/d" }}
+        {% if production.actual_start_date %}{{ production.actual_start_date|date:"Y/m/d" }} 〜 {% if production.actual_start_date.year != production.actual_end_date.year %}{{ production.actual_end_date|date:"Y/m/d" }}{% else %}{{ production.actual_end_date|date:"m/d" }}{% endif %}{% else %}期間未設定{% endif %}
       </div>
     </div>
   </div>

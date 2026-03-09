@@ -41,4 +41,29 @@ urlpatterns = [
         views.ProcessDayCreateView.as_view(),
         name='process_day_add',
     ),
+    path(
+        '<int:pk>/vehicle-assignments/',
+        views.VehicleAssignmentListView.as_view(),
+        name='vehicle_assignment_list',
+    ),
+    path(
+        'vehicle-request/<int:pk>/assignment/',
+        views.VehicleAssignmentEditView.as_view(),
+        name='vehicle_assignment_edit',
+    ),
+    path(
+        '<int:production_pk>/members/add/',
+        views.ProductionMemberBulkAddView.as_view(),
+        name='member_add',
+    ),
+    path(
+        'members/<int:pk>/edit/',
+        views.ProductionMemberEditView.as_view(),
+        name='member_edit',
+    ),
+    path(
+        'members/<int:pk>/delete/',
+        views.ProductionMemberDeleteView.as_view(),
+        name='member_delete',
+    ),
 ]

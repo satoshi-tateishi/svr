@@ -7,8 +7,10 @@ from .models import (
     ProcessType,
     Production,
     ProductionHoliday,
+    ProductionMember,
     ProductionTemplate,
     StaffRequest,
+    VehicleAssignment,
     VehicleRequest,
 )
 
@@ -24,6 +26,12 @@ class ProductionTemplateAdmin(admin.ModelAdmin):
 class ProductionHolidayInline(admin.TabularInline):
     model = ProductionHoliday
     extra = 1
+
+
+class ProductionMemberInline(admin.TabularInline):
+    model = ProductionMember
+    extra = 1
+    fields = ('user', 'role', 'start_date', 'end_date', 'note')
 
 
 class ProcessInline(admin.TabularInline):
@@ -51,7 +59,14 @@ class ProcessDayInline(admin.TabularInline):
 class ProductionAdmin(admin.ModelAdmin):
     list_display = ('code', 'title', 'start_date', 'end_date', 'created_by')
     search_fields = ('code', 'title')
-    inlines = [ProductionHolidayInline, ProcessInline]
+    inlines = [ProductionMemberInline, ProductionHolidayInline, ProcessInline]
+
+
+@admin.register(ProductionMember)
+class ProductionMemberAdmin(admin.ModelAdmin):
+    list_display = ('production', 'role', 'user', 'start_date', 'end_date')
+    list_filter = ('role',)
+    search_fields = ('production__title', 'user__last_name', 'user__first_name')
 
 
 @admin.register(ProcessType)
@@ -73,8 +88,21 @@ class ProcessAdmin(admin.ModelAdmin):
     inlines = [ProcessDayInline]
 
 
+class VehicleAssignmentInline(admin.StackedInline):
+    model = VehicleAssignment
+    extra = 0
+    fields = ('status', 'assigned_vehicle', 'note')
+
+
 @admin.register(ProcessDay)
 class ProcessDayAdmin(admin.ModelAdmin):
     list_display = ('date', 'process_type', 'process', 'location', 'start_time', 'order')
     list_filter = ('date', 'process__production', 'process_type')
     inlines = [StaffRequestInline, VehicleRequestInline]
+
+
+@admin.register(VehicleAssignment)
+class VehicleAssignmentAdmin(admin.ModelAdmin):
+    list_display = ('vehicle_request', 'status', 'assigned_vehicle', 'updated_at')
+    list_filter = ('status',)
+    search_fields = ('vehicle_request__process_day__process__production__title',)

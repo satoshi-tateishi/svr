@@ -1,0 +1,107 @@
+<div id="modal-container"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm"
+     onclick="if(event.target === this) this.remove()">
+
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh]" onclick="event.stopPropagation()">
+
+    <!-- ヘッダー -->
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-none">
+      <h3 class="font-bold text-gray-900 text-base">
+        {% if member %}担当者を編集{% else %}担当者を追加{% endif %}
+      </h3>
+      <button type="button"
+              onclick="document.getElementById('modal-container').remove()"
+              class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- エラー -->
+    {% if error_message %}
+      <div class="px-6 pt-4 flex-none">
+        <div class="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          {{ error_message }}
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- フォーム -->
+    <form hx-post="{% if member %}{% url 'productions:member_edit' member.pk %}{% else %}{% url 'productions:member_add' production.pk %}{% endif %}"
+          hx-target="#modal-container"
+          hx-swap="outerHTML"
+          class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+      {% csrf_token %}
+
+      <!-- 担当者 -->
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">担当者 <span class="text-red-500">*</span></label>
+        {{ form.user }}
+        {% if form.user.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.user.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- 役割 -->
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">役割 <span class="text-red-500">*</span></label>
+        {{ form.role }}
+        {% if form.role.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.role.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- 担当期間 -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">担当開始日</label>
+          {{ form.start_date }}
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">担当終了日</label>
+          {{ form.end_date }}
+        </div>
+      </div>
+      {% if form.non_field_errors %}
+        <p class="text-xs text-red-600">{{ form.non_field_errors.0 }}</p>
+      {% endif %}
+
+      <!-- 備考 -->
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">備考</label>
+        {{ form.note }}
+      </div>
+
+      <!-- フッター -->
+      <div class="pt-2 flex gap-3">
+        <button type="button"
+                onclick="document.getElementById('modal-container').remove()"
+                class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+          キャンセル
+        </button>
+        <button type="submit"
+                class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-200">
+          保存
+        </button>
+      </div>
+    </form>
+
+    <!-- 削除ボタン（編集時のみ） -->
+    {% if member %}
+      <div class="px-6 pb-5 flex-none">
+        <form hx-post="{% url 'productions:member_delete' member.pk %}"
+              hx-confirm="この担当者を削除しますか？"
+              hx-target="#modal-container"
+              hx-swap="outerHTML"
+              hx-push-url="false">
+          {% csrf_token %}
+          <button type="submit"
+                  class="w-full py-2 rounded-xl border border-red-200 text-xs font-bold text-red-500 hover:bg-red-50 transition-colors">
+            <i class="fa-solid fa-trash mr-1"></i> この担当者を削除
+          </button>
+        </form>
+      </div>
+    {% endif %}
+
+  </div>
+</div>

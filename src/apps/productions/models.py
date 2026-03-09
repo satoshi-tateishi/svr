@@ -1,5 +1,6 @@
 from datetime import datetime, time
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
 from django.db import models
@@ -32,6 +33,31 @@ class Production(models.Model):
 
     def __str__(self):
         return f'[{self.code}] {self.title}'
+
+    @property
+    def actual_start_date(self):
+        """表示用開始日。ProcessDay がある場合はその最小日付、なければ start_date を返す。"""
+        # ProductionListView で annotate された値を優先（N+1 防止）
+        process_min = getattr(self, 'process_min_date', None)
+        if process_min is None:
+            from django.db.models import Min
+
+            process_min = ProcessDay.objects.filter(process__production=self).aggregate(
+                Min('date')
+            )['date__min']
+        return process_min or self.start_date
+
+    @property
+    def actual_end_date(self):
+        """表示用終了日。ProcessDay がある場合はその最大日付、なければ end_date を返す。"""
+        process_max = getattr(self, 'process_max_date', None)
+        if process_max is None:
+            from django.db.models import Max
+
+            process_max = ProcessDay.objects.filter(process__production=self).aggregate(
+                Max('date')
+            )['date__max']
+        return process_max or self.end_date
 
 
 class ProductionHoliday(models.Model):
@@ -270,3 +296,86 @@ class VehicleRequest(models.Model):
 
     def __str__(self):
         return self.requested_vehicle.name
+
+
+class VehicleAssignment(models.Model):
+    """車両手配（管理側）"""
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', '未対応'
+        REVIEWING = 'reviewing', '調整中'
+        CONFIRMED = 'confirmed', '確定'
+
+    vehicle_request = models.OneToOneField(
+        VehicleRequest,
+        on_delete=models.CASCADE,
+        related_name='assignment',
+        verbose_name='車両申請',
+    )
+    assigned_vehicle = models.ForeignKey(
+        'performances.Vehicle',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='production_vehicle_assignments',
+        verbose_name='手配車両',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        verbose_name='管理状態',
+    )
+    note = models.TextField(blank=True, default='', verbose_name='管理メモ')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '車両手配'
+        verbose_name_plural = '車両手配一覧'
+        ordering = ['vehicle_request__process_day__date', 'vehicle_request__requested_time']
+
+    def __str__(self):
+        return f'{self.vehicle_request} - {self.get_status_display()}'
+
+
+class ProductionMember(models.Model):
+    """公演担当者（サウンドデザイナー・チーフ等）"""
+
+    class Role(models.TextChoices):
+        SOUND_DESIGNER = 'sound_designer', 'サウンドデザイナー'
+        CHIEF = 'chief', 'チーフ'
+
+    production = models.ForeignKey(
+        Production,
+        on_delete=models.CASCADE,
+        related_name='members',
+        verbose_name='公演',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='production_memberships',
+        verbose_name='担当者',
+    )
+    role = models.CharField(
+        max_length=30,
+        choices=Role.choices,
+        verbose_name='役割',
+    )
+    start_date = models.DateField(null=True, blank=True, verbose_name='担当開始日')
+    end_date = models.DateField(null=True, blank=True, verbose_name='担当終了日')
+    note = models.TextField(blank=True, default='', verbose_name='備考')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # role の表示順は Role.choices 定義順（sound_designer → chief）に従う。
+    # DB の ordering は role の文字列ソートになるため、view 側で明示的に並べる。
+    # （将来 role が増えた場合も Role.choices の列挙順に従って表示できる）
+    class Meta:
+        verbose_name = '公演担当者'
+        verbose_name_plural = '公演担当者一覧'
+        ordering = ['start_date']
+
+    def __str__(self):
+        name = self.user.profile.full_name if hasattr(self.user, 'profile') else self.user.username
+        return f'{self.get_role_display()} - {name}'

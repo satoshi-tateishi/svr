@@ -38,6 +38,45 @@
       <textarea name="note" rows="3" class="form-textarea block w-full rounded-lg border-gray-200 focus:ring-indigo-500 focus:border-indigo-500" placeholder="備考があれば入力してください">{{ form.note.value|default:'' }}</textarea>
     </div>
 
+    <!-- 担当者（任意） -->
+    <div class="border-t border-gray-100 pt-5">
+      <p class="text-xs font-bold text-gray-500 uppercase mb-3">
+        担当者 <span class="text-red-500">*</span>
+        <span class="text-gray-400 font-normal normal-case">どちらか1人以上必須</span>
+      </p>
+      {% if member_error %}
+        <p class="mb-2 text-xs text-red-600 flex items-center gap-1">
+          <i class="fa-solid fa-circle-exclamation"></i> {{ member_error }}
+        </p>
+      {% endif %}
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">サウンドデザイナー</label>
+          <select name="sound_designer_id"
+                  class="form-select block w-full rounded-lg border-gray-200 focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="">--- 未選択 ---</option>
+            {% for u in users %}
+              <option value="{{ u.pk }}" {% if u.pk|stringformat:"s" == selected_sound_designer_id %}selected{% endif %}>
+                {% if u.profile %}{{ u.profile.full_name }}{% else %}{{ u.username }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">チーフ</label>
+          <select name="chief_id"
+                  class="form-select block w-full rounded-lg border-gray-200 focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="">--- 未選択 ---</option>
+            {% for u in users %}
+              <option value="{{ u.pk }}" {% if u.pk|stringformat:"s" == selected_chief_id %}selected{% endif %}>
+                {% if u.profile %}{{ u.profile.full_name }}{% else %}{{ u.username }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
     <div class="pt-4">
       <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">
         公演を保存する

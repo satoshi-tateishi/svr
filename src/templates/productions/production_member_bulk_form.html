@@ -1,0 +1,162 @@
+<div id="modal-container"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm"
+     x-data="{
+         rows: [{ user_id: '', role: '', start_date: '', end_date: '', note: '' }],
+         addRow(role) {
+             this.rows.push({ user_id: '', role: role || '', start_date: '', end_date: '', note: '' });
+         },
+         removeRow(index) {
+             if (this.rows.length > 1) {
+                 this.rows.splice(index, 1);
+             }
+         },
+         prepareSubmit() {
+             // user_id を文字列 → 数値変換（空文字はそのまま送る。view 側でスキップ）
+             this.rows = this.rows.map(r => ({
+                 ...r,
+                 user_id: r.user_id ? String(r.user_id) : '',
+             }));
+         }
+     }"
+     onclick="if(event.target === this) this.remove()">
+
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]"
+       onclick="event.stopPropagation()">
+
+    <!-- ヘッダー -->
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-none">
+      <h3 class="font-bold text-gray-900 text-base">担当者を追加</h3>
+      <button type="button"
+              onclick="document.getElementById('modal-container').remove()"
+              class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- クイック追加ボタン -->
+    <div class="px-6 py-3 bg-gray-50 border-b border-gray-100 flex-none flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-500 font-bold">クイック追加：</span>
+      {% for role_value, role_label in roles %}
+        <button type="button"
+                @click="addRow('{{ role_value }}')"
+                class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors">
+          <i class="fa-solid fa-plus text-xs"></i> {{ role_label }}
+        </button>
+      {% endfor %}
+      <button type="button"
+              @click="addRow('')"
+              class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+        <i class="fa-solid fa-plus text-xs"></i> 空行を追加
+      </button>
+    </div>
+
+    <!-- エラー -->
+    {% if error_message %}
+      <div class="px-6 pt-4 flex-none">
+        <div class="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          {{ error_message }}
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- フォーム -->
+    <form hx-post="{% url 'productions:member_add' production.pk %}"
+          hx-target="#modal-container"
+          hx-swap="outerHTML"
+          @submit="prepareSubmit()"
+          class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="members_json" :value="JSON.stringify(rows)">
+
+      <!-- 行ヘッダー -->
+      <div class="hidden lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_2fr_auto] gap-2 text-xs font-bold text-gray-400 px-1">
+        <span>担当者 <span class="text-red-400">*</span></span>
+        <span>役割 <span class="text-red-400">*</span></span>
+        <span>開始日</span>
+        <span>終了日</span>
+        <span>備考</span>
+        <span></span>
+      </div>
+
+      <!-- 行リスト -->
+      <template x-for="(row, index) in rows" :key="index">
+        <div class="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr_1fr_2fr_auto] gap-2 items-start p-3 bg-gray-50 rounded-xl">
+
+          <!-- 担当者 -->
+          <div>
+            <label class="block text-xs text-gray-500 mb-1 lg:hidden">担当者 <span class="text-red-400">*</span></label>
+            <select x-model="row.user_id"
+                    class="form-select block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+              <option value="">--- 選択 ---</option>
+              {% for u in users %}
+                <option value="{{ u.pk }}">{% if u.profile %}{{ u.profile.full_name }}{% else %}{{ u.username }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- 役割 -->
+          <div>
+            <label class="block text-xs text-gray-500 mb-1 lg:hidden">役割 <span class="text-red-400">*</span></label>
+            <select x-model="row.role"
+                    class="form-select block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+              <option value="">--- 選択 ---</option>
+              {% for role_value, role_label in roles %}
+                <option value="{{ role_value }}">{{ role_label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- 開始日 -->
+          <div>
+            <label class="block text-xs text-gray-500 mb-1 lg:hidden">開始日</label>
+            <input type="date"
+                   x-model="row.start_date"
+                   class="form-input block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+          </div>
+
+          <!-- 終了日 -->
+          <div>
+            <label class="block text-xs text-gray-500 mb-1 lg:hidden">終了日</label>
+            <input type="date"
+                   x-model="row.end_date"
+                   class="form-input block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+          </div>
+
+          <!-- 備考 -->
+          <div>
+            <label class="block text-xs text-gray-500 mb-1 lg:hidden">備考</label>
+            <input type="text"
+                   x-model="row.note"
+                   placeholder="備考（任意）"
+                   class="form-input block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+          </div>
+
+          <!-- 行削除ボタン -->
+          <div class="flex items-start pt-0.5">
+            <button type="button"
+                    @click="removeRow(index)"
+                    class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    title="この行を削除">
+              <i class="fa-solid fa-trash text-xs"></i>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <!-- フッター -->
+      <div class="pt-4 flex gap-3">
+        <button type="button"
+                onclick="document.getElementById('modal-container').remove()"
+                class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+          キャンセル
+        </button>
+        <button type="submit"
+                class="flex-2 flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-200">
+          <i class="fa-solid fa-check mr-1"></i> 一括保存
+        </button>
+      </div>
+    </form>
+
+  </div>
+</div>

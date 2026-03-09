@@ -1,13 +1,13 @@
 <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-  <table class="min-w-full text-sm">
+  <table class="min-w-full text-sm table-fixed">
     <thead class="bg-gray-50 border-b border-gray-200">
       <tr>
-        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">工程</th>
-        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">場所</th>
-        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">時間</th>
-        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">人員</th>
+        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap w-36">工程</th>
+        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap w-48">場所</th>
+        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap w-36">時間</th>
+        <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap w-56">人員</th>
         <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">車両</th>
-        <th class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">操作</th>
+        <th class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap w-24">操作</th>
       </tr>
     </thead>
     <tbody class="bg-white divide-y divide-gray-100">
@@ -76,7 +76,7 @@
           </td>
 
           {# 車両 #}
-          <td class="px-4 py-3 align-top min-w-[180px]">
+          <td class="px-4 py-3 align-top">
             {% if day.vehicle_requests.all %}
               <div class="flex flex-col gap-1.5">
                 {% for req in day.vehicle_requests.all %}

@@ -6,16 +6,20 @@
 {{ location_slots|json_script:"loc-data" }}
 {{ template_blocks|json_script:"block-defs" }}
 {{ presets|json_script:"preset-data" }}
+{% if restored_instances %}{{ restored_instances|json_script:"restored-instances" }}{% endif %}
+{% if restored_locations %}{{ restored_locations|json_script:"restored-locations" }}{% endif %}
 
-<div class="max-w-md mx-auto pb-32 px-2" 
-     x-data="setupApp()" 
+<div class="max-w-md mx-auto pb-32 px-3"
+     x-data="setupApp()"
      x-init="init()"
      x-cloak>
-  
+
   <!-- 公演情報ヘッダー -->
   <div class="mb-6">
     <div class="flex items-center gap-4 mb-3">
-      <a href="{% url 'productions:detail' production.id %}" class="flex-none w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-100 text-gray-400 hover:text-indigo-600 transition-colors" aria-label="戻る">
+      <a href="{% url 'productions:detail' production.id %}"
+         class="flex-none w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-100 text-gray-400 hover:text-indigo-600 transition-colors"
+         aria-label="戻る">
         <i class="fa-solid fa-chevron-left"></i>
       </a>
       <h1 class="text-xl font-bold text-gray-900 leading-tight">工程のセットアップ</h1>
@@ -24,7 +28,16 @@
       <div class="font-bold text-indigo-900">{{ production.title }}</div>
       <div class="text-xs text-indigo-700 mt-1 flex items-center gap-1">
         <i class="fa-regular fa-calendar"></i>
-        {% if production.actual_start_date %}{{ production.actual_start_date|date:"Y/m/d" }} 〜 {% if production.actual_start_date.year != production.actual_end_date.year %}{{ production.actual_end_date|date:"Y/m/d" }}{% else %}{{ production.actual_end_date|date:"m/d" }}{% endif %}{% else %}期間未設定{% endif %}
+        {% if production.actual_start_date %}
+          {{ production.actual_start_date|date:"Y/m/d" }} 〜
+          {% if production.actual_start_date.year != production.actual_end_date.year %}
+            {{ production.actual_end_date|date:"Y/m/d" }}
+          {% else %}
+            {{ production.actual_end_date|date:"m/d" }}
+          {% endif %}
+        {% else %}
+          期間未設定
+        {% endif %}
       </div>
     </div>
   </div>
@@ -32,14 +45,12 @@
   <!-- プリセット選択 -->
   <template x-if="presets && presets.length > 0">
     <section class="mb-6">
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-          <i class="fa-solid fa-wand-magic-sparkles"></i> プリセットを適用
-        </h2>
-      </div>
+      <h2 class="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-3">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> プリセットを適用
+      </h2>
       <div class="grid grid-cols-1 gap-2">
         <template x-for="preset in presets" :key="preset.id">
-          <button type="button" 
+          <button type="button"
                   @click="applyPreset(preset)"
                   class="flex flex-col items-start p-3 bg-white border border-indigo-100 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all text-left shadow-sm">
             <span class="text-sm font-bold text-indigo-900" x-text="preset.name"></span>
@@ -54,7 +65,9 @@
   {% if messages %}
   <div class="mb-6 space-y-2">
     {% for message in messages %}
-      <div class="p-4 rounded-2xl text-sm font-bold shadow-sm {% if message.tags == 'error' %}bg-red-50 text-red-700 border border-red-100{% else %}bg-green-50 text-green-700 border border-green-100{% endif %}">
+      <div class="p-4 rounded-2xl text-sm font-bold shadow-sm
+                  {% if message.tags == 'error' %}bg-red-50 text-red-700 border border-red-100
+                  {% else %}bg-green-50 text-green-700 border border-green-100{% endif %}">
         <i class="fa-solid {% if message.tags == 'error' %}fa-circle-exclamation{% else %}fa-circle-check{% endif %} mr-2"></i>
         {{ message }}
       </div>
@@ -68,26 +81,34 @@
     <input type="hidden" name="instances_json" :value="JSON.stringify(instances)">
     <input type="hidden" name="locations_json" :value="JSON.stringify(locationNames)">
 
-    <!-- 1. ロケーション定義 -->
-    <section class="mb-10 bg-white rounded-2xl shadow-sm border border-indigo-50 overflow-hidden">
-      <div class="px-5 py-4 bg-indigo-600 text-white flex items-center justify-between">
-        <h2 class="text-sm font-bold flex items-center gap-2">
-          <i class="fa-solid fa-location-dot"></i> 拠点の名称を設定
-        </h2>
-        <span class="text-[10px] bg-indigo-500 px-2 py-0.5 rounded-full">STEP 1</span>
+    <!-- STEP 1: 拠点の名称を設定 -->
+    <section class="mb-8 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="px-5 py-4 bg-indigo-600 text-white">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold flex items-center gap-2">
+            <i class="fa-solid fa-location-dot"></i> 拠点の名称を設定
+          </h2>
+          <span class="text-[10px] bg-indigo-500 px-2 py-0.5 rounded-full font-bold">STEP 1</span>
+        </div>
+        <p class="text-[11px] text-indigo-200 mt-1">
+          STEP 2 の工程ブロックで「場所」として参照されます
+        </p>
       </div>
-      <div class="p-5 space-y-6">
+      <div class="p-5 space-y-5">
         <template x-for="group in locationGroups" :key="group.group_key">
-          <div class="space-y-3">
-            <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2" x-text="group.label"></h3>
-            <div class="grid grid-cols-1 gap-3">
+          <div>
+            <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <i class="fa-solid fa-location-dot text-gray-300"></i>
+              <span x-text="group.label"></span>
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <template x-for="(slot, idx) in group.slots" :key="slot.id">
                 <div class="flex items-center gap-2">
-                  <span class="text-[10px] font-bold text-gray-300 w-4" x-text="idx + 1"></span>
-                  <input type="text" 
+                  <span class="text-[10px] font-bold text-gray-300 w-3 flex-none" x-text="idx + 1"></span>
+                  <input type="text"
                          x-model="locationNames[slot.id]"
                          :placeholder="group.label + (idx + 1) + 'の名称'"
-                         class="flex-1 rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2.5">
+                         class="flex-1 rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
                 </div>
               </template>
             </div>
@@ -96,110 +117,211 @@
       </div>
     </section>
 
-    <!-- 2. 工程ブロック -->
+    <!-- STEP 2: 工程ブロックの構成 -->
     <section class="mb-10">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-          <span class="w-1 h-4 bg-indigo-600 rounded"></span>
-          工程ブロックの構成
-        </h2>
-        <span class="text-[10px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-bold">STEP 2</span>
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+            <span class="w-1 h-4 bg-indigo-600 rounded-full inline-block"></span>
+            工程ブロックの構成
+          </h2>
+          <p class="text-[10px] text-gray-400 mt-0.5 pl-3">1ブロック = 1工程のまとまりです</p>
+        </div>
+        <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold">STEP 2</span>
       </div>
 
-      <div class="space-y-4">
+      <!-- ブロック一覧: タイムライン型 -->
+      <div>
+
+        <!-- 空状態 -->
+        <div x-show="instances.length === 0"
+             class="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 mb-4">
+          <i class="fa-regular fa-calendar text-3xl text-gray-300 mb-3 block"></i>
+          <p class="text-sm font-bold text-gray-400">工程ブロックがありません</p>
+          <p class="text-[11px] text-gray-300 mt-1">下のボタンから工程を追加してください</p>
+        </div>
+
         <template x-for="(inst, index) in instances" :key="inst.uid">
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all"
-               :class="{'border-indigo-200 ring-1 ring-indigo-50': inst.mode === 'date_range_performance'}">
-            
-            <!-- ヘッダー -->
-            <div class="px-4 py-3 bg-gray-50 flex items-center justify-between border-b border-gray-100">
-              <div class="flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full" :class="getModeColor(inst.mode)"></span>
-                <span class="text-[10px] font-black text-gray-400 uppercase tracking-tight" x-text="getModeLabel(inst.mode)"></span>
+          <!-- タイムライン行 -->
+          <div class="flex gap-3 pb-3">
+
+            <!-- 左列: 番号バブル ＋ タイムライン縦線 -->
+            <div class="flex flex-col items-center w-8 flex-none">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black flex-none"
+                   :class="getModeNumberClass(inst.mode)">
+                <span x-text="index + 1"></span>
               </div>
-              <div class="flex items-center gap-1">
-                <button type="button" @click="moveInstance(index, -1)" :disabled="index === 0" class="p-2 text-gray-300 hover:text-indigo-600 disabled:opacity-30" aria-label="上に移動">
-                  <i class="fa-solid fa-arrow-up text-xs"></i>
-                </button>
-                <button type="button" @click="moveInstance(index, 1)" :disabled="index === instances.length - 1" class="p-2 text-gray-300 hover:text-indigo-600 disabled:opacity-30" aria-label="下に移動">
-                  <i class="fa-solid fa-arrow-down text-xs"></i>
-                </button>
-                <button type="button" @click="duplicateInstance(index)" class="p-2 text-indigo-400 hover:text-indigo-600" aria-label="複製">
-                  <i class="fa-solid fa-copy"></i>
-                </button>
-                <button type="button" @click="removeInstance(index)" class="p-2 text-gray-300 hover:text-red-500" aria-label="削除">
-                  <i class="fa-solid fa-trash-can text-sm"></i>
-                </button>
-              </div>
+              <!-- 縦線（最後のブロック以外に表示） -->
+              <div x-show="index < instances.length - 1"
+                   class="w-px flex-1 bg-gray-100 mt-1"></div>
             </div>
 
-            <!-- ボディ -->
-            <div class="p-4 space-y-4">
-              <div>
-                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">ブロック名</label>
-                <input type="text" x-model="inst.title"
-                       class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5">
-              </div>
+            <!-- 右列: カード本体 -->
+            <div class="flex-1 min-w-0 rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex">
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">
-                    <span x-show="inst.mode === 'manual_subtasks'"><i class="fa-solid fa-circle-exclamation text-yellow-500 mr-1"></i></span>
-                    開始日
-                  </label>
-                  <input type="date" x-model="inst.start"
-                         class="block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
-                </div>
-                <template x-if="inst.mode !== 'single_day' && inst.mode !== 'manual_subtasks'">
-                  <div>
-                    <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">終了日</label>
-                    <input type="date" x-model="inst.end"
-                           class="block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
+              <!-- 左側カラーアクセント帯 -->
+              <div class="w-1 flex-none" :class="getModeAccentClass(inst.mode)"></div>
+
+              <!-- カードコンテンツ -->
+              <div class="flex-1 min-w-0 bg-white">
+
+                <!-- カードヘッダー: モードバッジ ＋ タイトル ＋ 操作ボタン -->
+                <div class="px-4 py-3 flex items-start justify-between"
+                     :class="getModeHeaderBg(inst.mode)">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-1.5 mb-1">
+                      <span class="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded"
+                            :class="getModeBadgeClass(inst.mode)">
+                        <i :class="getModeIcon(inst.mode)"></i>
+                        <span x-text="getModeLabel(inst.mode)"></span>
+                      </span>
+                    </div>
+                    <div class="text-sm font-bold text-gray-900 truncate"
+                         x-text="inst.title || '（名称未設定）'"></div>
                   </div>
-                </template>
-              </div>
+                  <!-- 操作ボタン群 -->
+                  <div class="flex items-center gap-0 ml-2 flex-none">
+                    <button type="button"
+                            @click="moveInstance(index, -1)"
+                            :disabled="index === 0"
+                            class="p-1.5 text-gray-300 hover:text-indigo-600 disabled:opacity-30 rounded-lg hover:bg-white/60 transition-colors"
+                            aria-label="上に移動">
+                      <i class="fa-solid fa-arrow-up text-xs"></i>
+                    </button>
+                    <button type="button"
+                            @click="moveInstance(index, 1)"
+                            :disabled="index === instances.length - 1"
+                            class="p-1.5 text-gray-300 hover:text-indigo-600 disabled:opacity-30 rounded-lg hover:bg-white/60 transition-colors"
+                            aria-label="下に移動">
+                      <i class="fa-solid fa-arrow-down text-xs"></i>
+                    </button>
+                    <button type="button"
+                            @click="duplicateInstance(index)"
+                            class="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-white/60 transition-colors"
+                            aria-label="複製">
+                      <i class="fa-solid fa-copy text-xs"></i>
+                    </button>
+                    <button type="button"
+                            @click="removeInstance(index)"
+                            class="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-white/60 transition-colors"
+                            aria-label="削除">
+                      <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                  </div>
+                </div>
 
-              <div x-show="inst.location_group">
-                <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">場所 (拠点を参照)</label>
-                <select x-model="inst.location_choice"
-                        class="block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2.5">
-                  <option value="">-- 未選択 (直接入力または未定) --</option>
-                  <template x-for="slot in getSlotsForGroup(inst.location_group)" :key="slot.id">
-                    <option :value="slot.id" x-text="getSlotDisplayName(slot.id, slot.label)"></option>
-                  </template>
-                </select>
-              </div>
-            </div>
-          </div>
+                <!-- サマリーバー: 日付・場所のクイックプレビュー -->
+                <div class="px-4 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-3">
+                  <span class="flex items-center gap-1 text-[11px] text-gray-500">
+                    <i class="fa-regular fa-calendar text-gray-300"></i>
+                    <span x-text="getDateSummary(inst)"></span>
+                  </span>
+                  <span x-show="inst.location_group && getLocationSummary(inst)"
+                        class="flex items-center gap-1 text-[11px] text-gray-500">
+                    <i class="fa-solid fa-location-dot text-gray-300"></i>
+                    <span x-text="getLocationSummary(inst)"></span>
+                  </span>
+                </div>
+
+                <!-- フォーム入力欄 -->
+                <div class="p-4 space-y-4">
+
+                  <!-- ブロック名 -->
+                  <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">ブロック名</label>
+                    <input type="text"
+                           x-model="inst.title"
+                           class="block w-full rounded-xl border-gray-200 text-sm font-bold focus:ring-indigo-500 py-2.5">
+                  </div>
+
+                  <!-- 日付入力 -->
+                  <div class="grid grid-cols-2 gap-2">
+                    <div :class="(inst.mode === 'single_day' || inst.mode === 'manual_subtasks') ? 'col-span-2' : ''">
+                      <label class="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">
+                        <span x-show="inst.mode === 'manual_subtasks'">
+                          <i class="fa-solid fa-circle-exclamation text-yellow-500 mr-1"></i>
+                        </span>
+                        開始日
+                      </label>
+                      <input type="date"
+                             x-model="inst.start"
+                             class="block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
+                    </div>
+                    <template x-if="inst.mode !== 'single_day' && inst.mode !== 'manual_subtasks'">
+                      <div>
+                        <label class="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">終了日</label>
+                        <input type="date"
+                               x-model="inst.end"
+                               class="block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
+                      </div>
+                    </template>
+                  </div>
+
+                  <!-- 場所選択 -->
+                  <div x-show="inst.location_group">
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">
+                      場所
+                      <span class="text-gray-300 font-normal normal-case text-[9px]">（拠点を参照）</span>
+                    </label>
+                    <select x-model="inst.location_choice"
+                            class="block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2.5">
+                      <option value="">-- 未選択（直接入力または未定）--</option>
+                      <template x-for="slot in getSlotsForGroup(inst.location_group)" :key="slot.id">
+                        <option :value="slot.id"
+                                :selected="slot.id === inst.location_choice"
+                                x-text="getSlotDisplayName(slot.id, slot.label)"></option>
+                      </template>
+                    </select>
+                  </div>
+
+                </div>
+              </div><!-- /カードコンテンツ -->
+            </div><!-- /カード本体 -->
+          </div><!-- /タイムライン行 -->
         </template>
       </div>
 
       <!-- ブロック追加 -->
-      <div class="mt-6">
-        <button type="button" @click="showAddMenu = !showAddMenu" 
-                class="flex items-center gap-2 px-4 py-3 rounded-xl bg-white border-2 border-dashed border-gray-200 text-gray-500 font-bold hover:border-indigo-300 hover:text-indigo-600 transition-all w-full justify-center">
-          <i class="fa-solid fa-plus"></i> テンプレートからブロックを追加
+      <div class="mt-2" x-data="{ open: false }">
+        <button type="button"
+                @click="open = !open"
+                class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl bg-white border-2 border-dashed border-gray-200 text-gray-500 font-bold hover:border-indigo-300 hover:text-indigo-600 transition-all">
+          <i class="fa-solid fa-plus text-sm"></i>
+          <span>工程ブロックを追加</span>
+          <i class="fa-solid text-xs ml-auto transition-transform"
+             :class="open ? 'fa-chevron-up text-indigo-400 rotate-0' : 'fa-chevron-down'"></i>
         </button>
-        
-        <div x-show="showAddMenu" @click.away="showAddMenu = false" x-transition
-             class="w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-4 mt-2 grid grid-cols-2 gap-2 z-10">
+
+        <div x-show="open"
+             @click.away="open = false"
+             x-transition
+             class="mt-2 bg-white rounded-2xl shadow-lg border border-gray-100 p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 z-10">
           <template x-for="b in blockDefs" :key="b.key">
-            <button type="button" @click="addInstanceFromDef(b)"
-                    class="text-left px-3 py-2 rounded-lg hover:bg-indigo-50 text-xs font-bold text-gray-700 transition-colors">
-              <i class="fa-solid fa-square-plus text-indigo-300 mr-1"></i> <span x-text="b.label"></span>
+            <button type="button"
+                    @click="addInstanceFromDef(b); open = false"
+                    class="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50 bg-gray-50 transition-all text-left">
+              <div class="w-7 h-7 rounded-full flex items-center justify-center flex-none text-[10px]"
+                   :class="getModeNumberClass(b.mode)">
+                <i :class="getModeIcon(b.mode)"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-gray-800 truncate" x-text="b.label"></div>
+                <div class="text-[10px] text-gray-400" x-text="getModeLabel(b.mode)"></div>
+              </div>
             </button>
           </template>
         </div>
       </div>
     </section>
 
-    <!-- 実行ボタン -->
+    <!-- 実行ボタン（固定フッター） -->
     <div class="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-gray-100 z-40">
       <div class="max-w-md mx-auto">
-        <button type="submit" 
+        <button type="submit"
                 :disabled="instances.length === 0"
-                class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50">
-          この構成で工程を生成 (<span x-text="instances.length"></span>件)
+                class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+          この構成で工程を生成
+          <span class="font-normal text-indigo-200 text-sm ml-1">（<span x-text="instances.length"></span>件）</span>
         </button>
         <p class="text-[10px] text-gray-400 text-center mt-2 font-medium">※生成後は詳細画面で微調整が可能です</p>
       </div>
@@ -217,7 +339,7 @@ function setupApp() {
     presets: [],
     showAddMenu: false,
     nextUid: 1,
-    
+
     init() {
       // 初期化の二重実行を防止
       if (this.instances.length > 0) return;
@@ -225,19 +347,35 @@ function setupApp() {
       // データの読み込み
       this.locationGroups = JSON.parse(document.getElementById('loc-data').textContent);
       this.locationGroups.forEach(group => {
-        group.slots.forEach(slot => { this.locationNames[slot.id] = ""; });
+        group.slots.forEach(slot => { this.locationNames[slot.id] = ''; });
       });
       this.blockDefs = JSON.parse(document.getElementById('block-defs').textContent);
-      
+
       const presetData = document.getElementById('preset-data');
       if (presetData) {
         this.presets = JSON.parse(presetData.textContent);
       }
 
-      // 初期ブロックの展開
-      this.blockDefs.forEach(b => {
-        if (b.default_enabled) this.addInstanceFromDef(b);
-      });
+      // バリデーションエラー後の復元データが存在する場合はそちらを優先
+      const restoredInstances = document.getElementById('restored-instances');
+      const restoredLocations = document.getElementById('restored-locations');
+
+      if (restoredInstances) {
+        const data = JSON.parse(restoredInstances.textContent);
+        // uid を再採番して復元
+        this.instances = data.map(item => ({ ...item, uid: this.nextUid++ }));
+      } else {
+        // 初回表示のみ default_enabled ブロックを展開
+        this.blockDefs.forEach(b => {
+          if (b.default_enabled) this.addInstanceFromDef(b);
+        });
+      }
+
+      if (restoredLocations) {
+        const locs = JSON.parse(restoredLocations.textContent);
+        // locationGroups で初期化済みのキーを上書き（未知キーも追加されるが実害なし）
+        Object.assign(this.locationNames, locs);
+      }
     },
 
     applyPreset(preset) {
@@ -255,10 +393,10 @@ function setupApp() {
       this.instances = preset.template_data.map(item => ({
         ...item,
         uid: this.nextUid++,
-        location_choice: item.location_choice || "",
+        location_choice: item.location_choice || '',
         // 日付が空、または "null" の場合に公演日付で補完
-        start: (item.start && item.start !== "null") ? item.start : prodStart,
-        end: (item.end && item.end !== "null") ? item.end : prodEnd
+        start: (item.start && item.start !== 'null') ? item.start : prodStart,
+        end: (item.end && item.end !== 'null') ? item.end : prodEnd,
       }));
 
       this.showAddMenu = false;
@@ -270,10 +408,10 @@ function setupApp() {
         template_key: def.key,
         title: def.label,
         mode: def.mode,
-        location_group: def.location_group || "",
-        location_choice: "",
+        location_group: def.location_group || '',
+        location_choice: '',
         start: "{{ production.start_date|date:'Y-m-d' }}",
-        end: "{{ production.end_date|date:'Y-m-d' }}"
+        end: "{{ production.end_date|date:'Y-m-d' }}",
       });
       this.showAddMenu = false;
     },
@@ -281,7 +419,7 @@ function setupApp() {
     duplicateInstance(index) {
       const copy = JSON.parse(JSON.stringify(this.instances[index]));
       copy.uid = this.nextUid++;
-      copy.title = copy.title + " (コピー)";
+      copy.title = copy.title + ' (コピー)';
       this.instances.splice(index + 1, 0, copy);
     },
 
@@ -307,15 +445,105 @@ function setupApp() {
     },
 
     getModeLabel(mode) {
-      const labels = { 'single_day': '単日', 'date_range_same_task': '期間', 'date_range_performance': '本番期間', 'manual_subtasks': '枠のみ' };
+      const labels = {
+        'single_day': '単日',
+        'date_range_same_task': '期間',
+        'date_range_performance': '本番期間',
+        'manual_subtasks': '枠のみ',
+      };
       return labels[mode] || mode;
     },
 
     getModeColor(mode) {
-      const colors = { 'single_day': 'bg-gray-400', 'date_range_same_task': 'bg-indigo-400', 'date_range_performance': 'bg-red-500', 'manual_subtasks': 'bg-yellow-400' };
+      const colors = {
+        'single_day': 'bg-gray-400',
+        'date_range_same_task': 'bg-indigo-400',
+        'date_range_performance': 'bg-red-500',
+        'manual_subtasks': 'bg-yellow-400',
+      };
       return colors[mode] || 'bg-gray-300';
-    }
-  }
+    },
+
+    // --- 追加補助メソッド ---
+
+    getModeAccentClass(mode) {
+      const classes = {
+        'single_day': 'bg-gray-300',
+        'date_range_same_task': 'bg-indigo-400',
+        'date_range_performance': 'bg-red-400',
+        'manual_subtasks': 'bg-yellow-400',
+      };
+      return classes[mode] || 'bg-gray-200';
+    },
+
+    getModeHeaderBg(mode) {
+      const classes = {
+        'single_day': 'bg-gray-50',
+        'date_range_same_task': 'bg-indigo-50',
+        'date_range_performance': 'bg-red-50',
+        'manual_subtasks': 'bg-yellow-50',
+      };
+      return classes[mode] || 'bg-gray-50';
+    },
+
+    getModeNumberClass(mode) {
+      const classes = {
+        'single_day': 'bg-white border-2 border-gray-300 text-gray-500',
+        'date_range_same_task': 'bg-indigo-50 border-2 border-indigo-300 text-indigo-600',
+        'date_range_performance': 'bg-red-50 border-2 border-red-300 text-red-600',
+        'manual_subtasks': 'bg-yellow-50 border-2 border-yellow-300 text-yellow-600',
+      };
+      return classes[mode] || 'bg-white border-2 border-gray-200 text-gray-400';
+    },
+
+    getModeBadgeClass(mode) {
+      const classes = {
+        'single_day': 'bg-gray-100 text-gray-500',
+        'date_range_same_task': 'bg-indigo-100 text-indigo-700',
+        'date_range_performance': 'bg-red-100 text-red-700',
+        'manual_subtasks': 'bg-yellow-100 text-yellow-700',
+      };
+      return classes[mode] || 'bg-gray-100 text-gray-500';
+    },
+
+    getModeIcon(mode) {
+      const icons = {
+        'single_day': 'fa-solid fa-calendar-day',
+        'date_range_same_task': 'fa-solid fa-calendar-week',
+        'date_range_performance': 'fa-solid fa-star',
+        'manual_subtasks': 'fa-regular fa-calendar',
+      };
+      return icons[mode] || 'fa-regular fa-calendar';
+    },
+
+    // 日付をサマリー形式で返す（M/D 形式）
+    getDateSummary(inst) {
+      if (inst.mode === 'manual_subtasks') return '枠のみ（日付は任意）';
+      const start = inst.start;
+      if (!start) return '日付未設定';
+      const fmt = (d) => {
+        if (!d) return '?';
+        const dt = new Date(d + 'T00:00:00');
+        return `${dt.getMonth() + 1}/${dt.getDate()}`;
+      };
+      if (inst.mode === 'single_day') return fmt(start);
+      const end = inst.end;
+      if (!end) return `${fmt(start)} 〜 未定`;
+      if (start === end) return `${fmt(start)}（1日）`;
+      return `${fmt(start)} 〜 ${fmt(end)}`;
+    },
+
+    // 場所サマリーを返す（未選択時は null）
+    getLocationSummary(inst) {
+      if (!inst.location_group) return null;
+      if (!inst.location_choice) return null;
+      const slots = this.getSlotsForGroup(inst.location_group);
+      const slot = slots.find(s => s.id === inst.location_choice);
+      if (!slot) return null;
+      const name = this.locationNames[inst.location_choice];
+      return name || slot.label;
+    },
+  };
 }
 </script>
 

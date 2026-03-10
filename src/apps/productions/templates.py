@@ -11,11 +11,11 @@ LOCATION_GROUPS = {
 # 基本ブロック（汎用的な「型」）
 BASIC_BLOCKS = [
     {
-        'key': 'rehearsal_prep',
-        'label': '稽古準備',
-        'mode': 'single_day',
+        'key': 'rehearsal_setup',
+        'label': '稽古場仕込み',
+        'mode': 'date_range_same_task',
         'location_group': 'rehearsal',
-        'tasks': ['kizai-standby', 'rehearsal-setup'],
+        'tasks': ['rehearsal-setup'],
         'default_enabled': True,
     },
     {
@@ -28,7 +28,7 @@ BASIC_BLOCKS = [
     },
     {
         'key': 'rehearsal_strike',
-        'label': '稽古場撤収',
+        'label': '稽古場バラシ',
         'mode': 'single_day',
         'location_group': 'rehearsal',
         'tasks': ['rehearsal-strike'],
@@ -60,7 +60,7 @@ BASIC_BLOCKS = [
     },
     {
         'key': 'theatre_strike',
-        'label': '劇場撤収',
+        'label': '劇場バラシ',
         'mode': 'single_day',
         'location_group': 'venue',
         'tasks': ['theatre-strike'],
@@ -70,6 +70,30 @@ BASIC_BLOCKS = [
 
 # 補助ブロック（任意追加・物流・イベント）
 AUXILIARY_BLOCKS = [
+    {
+        'key': 'kizai_standby_rehearsal',
+        'label': '機材スタンバイ(稽古)',
+        'mode': 'single_day',
+        'location_group': 'rehearsal',
+        'tasks': ['kizai-standby'],
+        'default_enabled': False,
+    },
+    {
+        'key': 'kizai_standby_performance',
+        'label': '機材スタンバイ(本番)',
+        'mode': 'single_day',
+        'location_group': 'venue',
+        'tasks': ['kizai-standby'],
+        'default_enabled': False,
+    },
+    {
+        'key': 'kizai_standby_travel',
+        'label': '機材スタンバイ(旅)',
+        'mode': 'single_day',
+        'location_group': 'other',
+        'tasks': ['kizai-standby'],
+        'default_enabled': False,
+    },
     {
         'key': 'warehouse_load',
         'label': '倉庫荷積み',
@@ -132,7 +156,7 @@ AUXILIARY_BLOCKS = [
         'mode': 'single_day',
         'location_group': 'warehouse',
         'tasks': ['final-unload'],
-        'default_enabled': True,
+        'default_enabled': False,
     },
 ]
 

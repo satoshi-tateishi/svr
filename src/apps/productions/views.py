@@ -654,13 +654,49 @@ class ProductionSetupView(LoginRequiredMixin, View):
             )
         return location_slots
 
-    def post(self, request, pk):
-        production = get_object_or_404(Production, pk=pk)
+    def _render_setup_with_restored(self, request, production, instances_json, locations_json):
+        """バリデーションエラー時に送信データを保持したまま setup 画面を再描画する"""
+        template_key = request.POST.get('template_key', 'standard')
+        template = PRODUCTION_TEMPLATES.get(template_key, PRODUCTION_TEMPLATES['standard'])
+        location_slots = self._build_location_slots()
+        presets = list(
+            ProductionTemplate.objects.filter(is_active=True).values(
+                'id', 'name', 'description', 'template_data'
+            )
+        )
+        try:
+            restored_instances = json.loads(instances_json)
+        except (json.JSONDecodeError, TypeError):
+            restored_instances = None
 
         try:
-            # 1. JSON ペイロードの取得とパース
-            instances_json = request.POST.get('instances_json', '[]')
-            locations_json = request.POST.get('locations_json', '{}')
+            restored_locations = json.loads(locations_json)
+        except (json.JSONDecodeError, TypeError):
+            restored_locations = None
+
+        return render(
+            request,
+            'productions/production_setup.html',
+            {
+                'production': production,
+                'template': template,
+                'template_key': template_key,
+                'template_blocks': template['blocks'],
+                'location_slots': location_slots,
+                'templates_all': PRODUCTION_TEMPLATES,
+                'presets': presets,
+                'restored_instances': restored_instances,
+                'restored_locations': restored_locations,
+            },
+        )
+
+    def post(self, request, pk):
+        production = get_object_or_404(Production, pk=pk)
+        instances_json = request.POST.get('instances_json', '[]')
+        locations_json = request.POST.get('locations_json', '{}')
+
+        try:
+            # 1. JSON ペイロードのパース
             instances_data = json.loads(instances_json)
             locations_data = json.loads(locations_json)
 
@@ -694,13 +730,14 @@ class ProductionSetupView(LoginRequiredMixin, View):
                     raise ValueError(f'ブロック「{raw_title}」の開始日が未入力です。')
 
                 is_range = block_def.get('mode') not in ['single_day', 'manual_subtasks']
-                if is_range and not e_val:
-                    raise ValueError(f'ブロック「{raw_title}」の終了日が未入力です。')
+                # 終了日が空の場合は開始日と同日の単日工程として扱う
 
                 try:
                     start_date = datetime.strptime(s_val, '%Y-%m-%d').date()
                     end_date = (
-                        datetime.strptime(e_val, '%Y-%m-%d').date() if is_range else start_date
+                        datetime.strptime(e_val, '%Y-%m-%d').date()
+                        if (is_range and e_val)
+                        else start_date
                     )
                 except ValueError:
                     raise ValueError(f'ブロック「{raw_title}」の日付形式が不正です。') from None
@@ -760,10 +797,14 @@ class ProductionSetupView(LoginRequiredMixin, View):
 
         except ValueError as e:
             messages.error(request, str(e))
-            return redirect('productions:setup', pk=pk)
+            return self._render_setup_with_restored(
+                request, production, instances_json, locations_json
+            )
         except Exception:
             messages.error(request, '工程の生成中に予期せぬエラーが発生しました。')
-            return redirect('productions:setup', pk=pk)
+            return self._render_setup_with_restored(
+                request, production, instances_json, locations_json
+            )
 
     def _get_unique_title(self, production, title):
         """タイトル重複回避ヘルパー"""

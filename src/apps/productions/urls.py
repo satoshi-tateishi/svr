@@ -66,4 +66,14 @@ urlpatterns = [
         views.ProductionMemberDeleteView.as_view(),
         name='member_delete',
     ),
+    path(
+        'block/<int:process_pk>/edit/',
+        views.ProcessBlockEditView.as_view(),
+        name='block_edit',
+    ),
+    path(
+        'block/<int:process_pk>/delete/',
+        views.ProcessBlockDeleteView.as_view(),
+        name='block_delete',
+    ),
 ]

@@ -1,5 +1,6 @@
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
+from datetime import time as dt_time
 from itertools import groupby
 
 from django.contrib import messages
@@ -15,7 +16,11 @@ from django.views.generic import CreateView, DetailView, ListView, View
 from apps.performances.models.vehicle import Vehicle
 
 from .forms import ProcessDayForm, ProductionMemberForm, StaffRequestForm, VehicleAssignmentForm
-from .mixins import AssignmentManagePermissionMixin, RequestEditPermissionMixin
+from .mixins import (
+    AssignmentManagePermissionMixin,
+    ProcessEditPermissionMixin,
+    RequestEditPermissionMixin,
+)
 from .models import (
     Position,
     Process,
@@ -28,7 +33,11 @@ from .models import (
     VehicleAssignment,
     VehicleRequest,
 )
-from .templates import LOCATION_GROUPS, PRODUCTION_TEMPLATES
+from .templates import (
+    BLOCK_POSITION_MAP,
+    BLOCK_PROCESS_TYPE_MAP,
+    SETUP_BLOCKS,
+)
 
 
 class StaffRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin, View):
@@ -498,10 +507,10 @@ class ProductionListView(LoginRequiredMixin, ListView):
 
 
 class ProductionCreateView(LoginRequiredMixin, CreateView):
-    """公演の新規作成"""
+    """公演の新規作成（タイトル・担当者のみ。全ブロックを自動生成して detail へ遷移）"""
 
     model = Production
-    fields = ['title', 'start_date', 'end_date', 'note']
+    fields = ['title']
     template_name = 'productions/production_form.html'
 
     def get_context_data(self, **kwargs):
@@ -545,8 +554,8 @@ class ProductionCreateView(LoginRequiredMixin, CreateView):
         form.instance.code = f'{base_code}-{count:03d}'
         with transaction.atomic():
             response = super().form_valid(form)
-            # 担当者の自動生成（選択されている場合のみ）
             production = self.object
+            # 担当者の登録（選択されている場合のみ）
             for role_value, field_name in [
                 (ProductionMember.Role.SOUND_DESIGNER, 'sound_designer_id'),
                 (ProductionMember.Role.CHIEF, 'chief_id'),
@@ -560,11 +569,19 @@ class ProductionCreateView(LoginRequiredMixin, CreateView):
                             role=role_value,
                         )
                     except (ValueError, TypeError):
-                        pass  # 不正な値は無視（通常は発生しない）
+                        pass
+            # 全ブロックを自動生成（不要なものはユーザーが後で削除）
+            for idx, block in enumerate(SETUP_BLOCKS):
+                Process.objects.create(
+                    production=production,
+                    title=block['label'],
+                    block_key=block['key'],
+                    order=idx,
+                )
         return response
 
     def get_success_url(self):
-        return reverse('productions:setup', kwargs={'pk': self.object.pk})
+        return reverse('productions:detail', kwargs={'pk': self.object.pk})
 
 
 class ProductionDetailView(LoginRequiredMixin, DetailView):
@@ -577,7 +594,7 @@ class ProductionDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # process_days をリスト化して1回のクエリで評価
-        process_days_list = list(
+        all_days = list(
             ProcessDay.objects.filter(process__production=self.object)
             .select_related('process', 'process_type')
             .prefetch_related(
@@ -586,19 +603,38 @@ class ProductionDetailView(LoginRequiredMixin, DetailView):
                 'vehicle_requests',
                 'vehicle_requests__requested_vehicle',
             )
-            .order_by('date', 'order', 'start_time')
+            .order_by('order', 'start_time')
+        )
+
+        # 日付あり / なし に分離
+        undated_days = [d for d in all_days if d.date is None]
+        dated_days = sorted(
+            [d for d in all_days if d.date is not None],
+            key=lambda x: (x.date, x.order, x.start_time or dt_time.min),
         )
 
         # ProcessDay の min/max を production に注入（actual_start/end_date の DB クエリを防ぐ）
-        dates = [d.date for d in process_days_list]
+        dates = [d.date for d in dated_days]
         self.object.process_min_date = min(dates) if dates else None
         self.object.process_max_date = max(dates) if dates else None
 
         grouped_days = []
-        for day_date, group in groupby(process_days_list, key=lambda x: x.date):
+        for day_date, group in groupby(dated_days, key=lambda x: x.date):
             grouped_days.append({'date': day_date, 'days': list(group)})
 
         context['grouped_days'] = grouped_days
+        context['undated_days'] = undated_days
+        context['undated_group'] = {'date': None, 'days': undated_days}
+
+        # 工程ブロック一覧（ブロック別ビュー用）
+        context['processes'] = list(
+            self.object.processes.prefetch_related(
+                'days',
+                'days__process_type',
+                'days__staff_requests',
+                'days__vehicle_requests',
+            ).order_by('order')
+        )
 
         # 担当者一覧（Role.choices 定義順で並べるため Python 側でソート）
         role_order = {role: idx for idx, (role, _) in enumerate(ProductionMember.Role.choices)}
@@ -611,14 +647,14 @@ class ProductionDetailView(LoginRequiredMixin, DetailView):
 
 
 class ProductionSetupView(LoginRequiredMixin, View):
-    """テンプレートからの工程セットアップ"""
+    """工程ブロックのセットアップ（日付入力なし・ブロック構成のみ）"""
+
+    # 日付入力が不要なモード
+    _NO_DATE_MODES = {'memo', 'sumida_check', 'kizai_standby'}
 
     def get(self, request, pk):
         production = get_object_or_404(Production, pk=pk)
-        template_key = request.GET.get('template', 'standard')
-        template = PRODUCTION_TEMPLATES.get(template_key, PRODUCTION_TEMPLATES['standard'])
-
-        location_slots = self._build_location_slots()
+        block_defs = SETUP_BLOCKS
 
         # データベースに登録されているプリセットを取得
         presets = list(
@@ -632,218 +668,94 @@ class ProductionSetupView(LoginRequiredMixin, View):
             'productions/production_setup.html',
             {
                 'production': production,
-                'template': template,
-                'template_key': template_key,
-                'template_blocks': template['blocks'],
-                'location_slots': location_slots,
-                'templates_all': PRODUCTION_TEMPLATES,
+                'block_defs': block_defs,
                 'presets': presets,
             },
         )
 
-    def _build_location_slots(self):
-        """ロケーションスロットの組み立てヘルパー"""
-        location_slots = []
-        for group_key, group_def in LOCATION_GROUPS.items():
-            slots = [
-                {'id': f'{group_key}_{i}', 'label': f'{group_def["label"]}{i + 1}'}
-                for i in range(group_def['default_slots'])
-            ]
-            location_slots.append(
-                {'group_key': group_key, 'label': group_def['label'], 'slots': slots}
-            )
-        return location_slots
-
-    def _render_setup_with_restored(self, request, production, instances_json, locations_json):
+    def _render_setup_with_restored(self, request, production, instances_json):
         """バリデーションエラー時に送信データを保持したまま setup 画面を再描画する"""
-        template_key = request.POST.get('template_key', 'standard')
-        template = PRODUCTION_TEMPLATES.get(template_key, PRODUCTION_TEMPLATES['standard'])
-        location_slots = self._build_location_slots()
-        presets = list(
-            ProductionTemplate.objects.filter(is_active=True).values(
-                'id', 'name', 'description', 'template_data'
-            )
-        )
         try:
             restored_instances = json.loads(instances_json)
         except (json.JSONDecodeError, TypeError):
             restored_instances = None
 
-        try:
-            restored_locations = json.loads(locations_json)
-        except (json.JSONDecodeError, TypeError):
-            restored_locations = None
+        presets = list(
+            ProductionTemplate.objects.filter(is_active=True).values(
+                'id', 'name', 'description', 'template_data'
+            )
+        )
 
         return render(
             request,
             'productions/production_setup.html',
             {
                 'production': production,
-                'template': template,
-                'template_key': template_key,
-                'template_blocks': template['blocks'],
-                'location_slots': location_slots,
-                'templates_all': PRODUCTION_TEMPLATES,
+                'block_defs': SETUP_BLOCKS,
                 'presets': presets,
                 'restored_instances': restored_instances,
-                'restored_locations': restored_locations,
             },
         )
 
     def post(self, request, pk):
         production = get_object_or_404(Production, pk=pk)
         instances_json = request.POST.get('instances_json', '[]')
-        locations_json = request.POST.get('locations_json', '{}')
 
         try:
-            # 1. JSON ペイロードのパース
             instances_data = json.loads(instances_json)
-            locations_data = json.loads(locations_json)
 
             if not instances_data:
                 raise ValueError('工程ブロックが一つも選択されていません。最低一つは必要です。')
 
-            # 2. テンプレート定義のロード
-            template_key = request.POST.get('template_key', 'standard')
-            template = PRODUCTION_TEMPLATES.get(template_key, PRODUCTION_TEMPLATES['standard'])
-            block_defs = {b['key']: b for b in template['blocks']}
+            block_defs_map = {b['key']: b for b in SETUP_BLOCKS}
 
-            # 3. 事前バリデーション
-            required_slugs = set()
-            validated_instances = []
-
+            # バリデーション
+            validated = []
             for inst in instances_data:
-                t_key = inst.get('template_key')
-                block_def = block_defs.get(t_key)
+                b_key = inst.get('block_key')
+                block_def = block_defs_map.get(b_key)
                 if not block_def:
-                    raise ValueError(f'不正なテンプレートキーが含まれています: {t_key}')
+                    raise ValueError(f'不正なブロックキーが含まれています: {b_key}')
 
-                # タイトル取得（トリミングは _get_unique_title 内でも行うがここでもチェック）
-                raw_title = (inst.get('title') or block_def['label']).strip()
-                if not raw_title:
-                    raw_title = '無題ブロック'
+                raw_title = (inst.get('title') or block_def['label']).strip() or '無題ブロック'
+                validated.append({'def': block_def, 'title': raw_title, 'key': b_key})
 
-                # 日付の存在チェック
-                s_val = inst.get('start')
-                e_val = inst.get('end')
-                if not s_val:
-                    raise ValueError(f'ブロック「{raw_title}」の開始日が未入力です。')
-
-                is_range = block_def.get('mode') not in ['single_day', 'manual_subtasks']
-                # 終了日が空の場合は開始日と同日の単日工程として扱う
-
-                try:
-                    start_date = datetime.strptime(s_val, '%Y-%m-%d').date()
-                    end_date = (
-                        datetime.strptime(e_val, '%Y-%m-%d').date()
-                        if (is_range and e_val)
-                        else start_date
-                    )
-                except ValueError:
-                    raise ValueError(f'ブロック「{raw_title}」の日付形式が不正です。') from None
-
-                if end_date < start_date:
-                    raise ValueError(f'ブロック「{raw_title}」の終了日が開始日より前です。')
-
-                # ProcessType チェック対象の収集
-                if block_def.get('mode') != 'manual_subtasks':
-                    tasks = block_def.get('tasks', [])
-                    required_slugs.update(tasks)
-                    if block_def.get('mode') == 'date_range_performance':
-                        required_slugs.add('opening-night')
-
-                validated_instances.append(
-                    {
-                        'def': block_def,
-                        'title': raw_title,
-                        'start_date': start_date,
-                        'end_date': end_date,
-                        'location_choice': inst.get('location_choice'),
-                    }
-                )
-
-            # 4. ProcessType の一括存在確認
-            pt_map = {pt.slug: pt for pt in ProcessType.objects.filter(slug__in=required_slugs)}
-            missing_slugs = required_slugs - set(pt_map.keys())
-            if missing_slugs:
-                slugs_str = ', '.join(sorted(missing_slugs))
-                raise ValueError(f'システムエラー: 以下の工程タイプが未定義です: {slugs_str}')
-
-            # 5. 生成実行 (トランザクション)
+            # 生成実行（全ブロック Process のみ作成・ProcessDay は後でブロック編集から作成）
             with transaction.atomic():
-                for idx, item in enumerate(validated_instances):
+                for idx, item in enumerate(validated):
                     block_def = item['def']
                     unique_title = self._get_unique_title(production, item['title'])
-
-                    process = Process.objects.create(
-                        production=production, title=unique_title, order=idx
+                    Process.objects.create(
+                        production=production,
+                        title=unique_title,
+                        block_key=item['key'],
+                        order=idx,
                     )
 
-                    if block_def.get('mode') == 'manual_subtasks':
-                        continue
-
-                    location_name = locations_data.get(item['location_choice'], '')
-                    self._create_process_days(
-                        process,
-                        block_def,
-                        item['start_date'],
-                        item['end_date'],
-                        location_name,
-                        pt_map,
-                    )
-
-            messages.success(request, f'{len(validated_instances)} 件の工程を正常に生成しました。')
+            cnt = len(validated)
+            msg = (
+                f'{cnt} 件の工程ブロックを登録しました。'
+                '各ブロックをクリックして詳細を入力してください。'
+            )
+            messages.success(request, msg)
             return redirect('productions:detail', pk=production.pk)
 
         except ValueError as e:
             messages.error(request, str(e))
-            return self._render_setup_with_restored(
-                request, production, instances_json, locations_json
-            )
+            return self._render_setup_with_restored(request, production, instances_json)
         except Exception:
             messages.error(request, '工程の生成中に予期せぬエラーが発生しました。')
-            return self._render_setup_with_restored(
-                request, production, instances_json, locations_json
-            )
+            return self._render_setup_with_restored(request, production, instances_json)
 
     def _get_unique_title(self, production, title):
         """タイトル重複回避ヘルパー"""
-        title = (title or '').strip()
-        if not title:
-            title = '無題ブロック'
-
+        title = (title or '').strip() or '無題ブロック'
         original_title = title
         counter = 2
         while Process.objects.filter(production=production, title=title).exists():
             title = f'{original_title} ({counter})'
             counter += 1
         return title
-
-    def _create_process_days(self, process, block_def, start_date, end_date, location_name, pt_map):
-        """ProcessDay 群を生成する内部ロジック"""
-        mode = block_def.get('mode', 'single_day')
-        curr_date = start_date
-        day_offset = 0
-
-        while curr_date <= end_date:
-            for task_idx, task_slug in enumerate(block_def['tasks']):
-                final_slug = task_slug
-                if mode == 'date_range_performance' and day_offset == 0:
-                    final_slug = 'opening-night'
-
-                pt = pt_map[final_slug]
-                ProcessDay.objects.create(
-                    process=process,
-                    process_type=pt,
-                    date=curr_date,
-                    location=location_name,
-                    order=task_idx,
-                )
-
-            if mode == 'single_day':
-                break
-            curr_date += timedelta(days=1)
-            day_offset += 1
 
 
 class ProcessDayEditView(LoginRequiredMixin, View):
@@ -873,7 +785,11 @@ class ProcessDayCreateView(LoginRequiredMixin, View):
 
     def get(self, request, production_id):
         production = get_object_or_404(Production, pk=production_id)
-        form = ProcessDayForm()
+        initial = {}
+        date_str = request.GET.get('date', '')
+        if date_str:
+            initial['date'] = date_str
+        form = ProcessDayForm(initial=initial)
         return render(
             request,
             'productions/process_day_form.html',
@@ -884,12 +800,12 @@ class ProcessDayCreateView(LoginRequiredMixin, View):
         production = get_object_or_404(Production, pk=production_id)
         form = ProcessDayForm(request.POST)
         if form.is_valid():
-            # TODO: 申請ユーザー向け画面では "基本工程" 以外の適切なブロック選択が必要
             process, _ = Process.objects.get_or_create(
                 production=production, title='基本工程', defaults={'order': 0}
             )
             day = form.save(commit=False)
             day.process = process
+            day.order = ProcessDay.objects.filter(process=process, date=day.date).count()
             day.save()
             response = HttpResponse()
             response['HX-Redirect'] = reverse('productions:detail', kwargs={'pk': production.id})
@@ -1182,3 +1098,293 @@ class ProductionMemberBulkAddView(LoginRequiredMixin, View):
         response = HttpResponse()
         response['HX-Redirect'] = reverse('productions:detail', kwargs={'pk': production.pk})
         return response
+
+
+class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View):
+    """工程ブロック一括編集（ブロック種別ごとに専用フォームを表示）"""
+
+    def get(self, request, process_pk):
+        process = get_object_or_404(
+            Process.objects.select_related('production').prefetch_related(
+                'days',
+                'days__process_type',
+                'days__staff_requests__position',
+                'days__vehicle_requests__requested_vehicle',
+            ),
+            pk=process_pk,
+        )
+        ctx = self._build_context(process)
+        return render(request, 'productions/process_block_edit.html', ctx)
+
+    def post(self, request, process_pk):
+        process = get_object_or_404(Process.objects.select_related('production'), pk=process_pk)
+        block_key = process.block_key
+        production = process.production
+
+        try:
+            with transaction.atomic():
+                if block_key == 'sumida_check':
+                    self._save_sumida_check(request, process)
+                elif block_key == 'kizai_standby':
+                    self._save_kizai_standby(request, process)
+                elif block_key in ('memo_1', 'memo_2', 'memo_3'):
+                    self._save_memo(request, process)
+                else:
+                    self._save_single_day_block(request, process)
+
+            messages.success(request, f'「{process.title}」を保存しました。')
+            return redirect('productions:detail', pk=production.pk)
+        except ValueError as e:
+            messages.error(request, str(e))
+            ctx = self._build_context(process)
+            ctx['post_data'] = request.POST
+            return render(request, 'productions/process_block_edit.html', ctx)
+
+    # ─── コンテキスト構築 ────────────────────────────────────────────
+
+    def _build_context(self, process):
+        block_key = process.block_key
+        vehicles = Vehicle.objects.filter(is_active=True).order_by('order', 'name')
+        days = list(
+            process.days.prefetch_related(
+                'staff_requests__position',
+                'vehicle_requests__requested_vehicle',
+            ).order_by('date', 'order')
+        )
+
+        position_map = BLOCK_POSITION_MAP.get(block_key, {})
+        position_list = [{'slug': slug, 'label': label} for slug, label in position_map.items()]
+
+        days_data = []
+        existing_vehicle = None
+        existing_staff_helper = None
+        for d in days:
+            staff_by_slug = {sr.position.slug: sr for sr in d.staff_requests.all()}
+            days_data.append(
+                {
+                    'date': d.date.isoformat() if d.date else '',
+                    'standby_time': d.start_time.strftime('%H:%M') if d.start_time else '',
+                    'positions': {
+                        s: {
+                            'qty': staff_by_slug[s].quantity if s in staff_by_slug else '',
+                            'include_self': (
+                                staff_by_slug[s].include_self if s in staff_by_slug else False
+                            ),
+                        }
+                        for s in position_map
+                    },
+                }
+            )
+            if not existing_vehicle:
+                existing_vehicle = d.vehicle_requests.first()
+            if not existing_staff_helper:
+                existing_staff_helper = staff_by_slug.get('helper')
+
+        return {
+            'process': process,
+            'production': process.production,
+            'block_key': block_key,
+            'vehicles': vehicles,
+            'days_data': days_data,
+            'position_list': position_list,
+            'existing_vehicle': existing_vehicle,
+            'existing_staff_helper': existing_staff_helper,
+            'position_rows': [],  # kizai_standby との互換性のため残す
+        }
+
+    # ─── 保存ロジック ────────────────────────────────────────────────
+
+    def _save_sumida_check(self, request, process):
+        sumida = request.POST.get('sumida_required') == '1'
+        process.sumida_required = sumida
+        process.save(update_fields=['sumida_required'])
+
+    def _save_kizai_standby(self, request, process):
+        assistant = request.POST.get('assistant_required') == '1'
+        process.assistant_required = assistant
+        process.save(update_fields=['assistant_required'])
+
+        if assistant:
+            qty_str = request.POST.get('helper_quantity', '1').strip()
+            include_self = request.POST.get('helper_include_self') == '1'
+            try:
+                qty = max(1, int(qty_str))
+            except ValueError:
+                qty = 1
+
+            from .models import Position
+
+            position = Position.objects.filter(slug='helper').first()
+            if not position:
+                return
+
+            # ProcessDay がなければ作成
+            slug = BLOCK_PROCESS_TYPE_MAP.get('kizai_standby', 'kizai-standby')
+            pt = ProcessType.objects.filter(slug=slug).first()
+            if not pt:
+                pt = ProcessType.objects.filter(slug='kizai-standby').first()
+            if not pt:
+                return
+
+            day, _ = ProcessDay.objects.get_or_create(
+                process=process,
+                process_type=pt,
+                defaults={'order': 0},
+            )
+            StaffRequest.objects.update_or_create(
+                process_day=day,
+                position=position,
+                defaults={'quantity': qty, 'include_self': include_self},
+            )
+        else:
+            # 助っ人不要の場合は既存の ProcessDay ごと削除
+            process.days.all().delete()
+
+    def _save_memo(self, request, process):
+        note = request.POST.get('note', '').strip()
+        process.note = note
+        process.save(update_fields=['note'])
+
+    def _save_single_day_block(self, request, process):
+        """single_day モードのブロック（仕込み・バラシ・旅荷積み等）を保存する"""
+        block_key = process.block_key
+
+        # ProcessType 取得
+        pt_slug = BLOCK_PROCESS_TYPE_MAP.get(block_key)
+        if not pt_slug:
+            raise ValueError(f'ブロックキー "{block_key}" に対応する工程タイプが見つかりません。')
+        pt = ProcessType.objects.filter(slug=pt_slug).first()
+        if not pt:
+            raise ValueError(f'工程タイプ "{pt_slug}" がデータベースに存在しません。')
+
+        # ── 人員申請（多日 JSON）────────────────────────────────────────
+        staff_days_raw = request.POST.get('staff_days_json', '[]').strip()
+        try:
+            staff_days = json.loads(staff_days_raw)
+        except (ValueError, TypeError):
+            staff_days = []
+
+        valid_days = [d for d in staff_days if isinstance(d, dict) and d.get('date')]
+        if not valid_days:
+            raise ValueError('日付を1件以上入力してください。')
+
+        # 全 ProcessDay を削除して再作成（VehicleRequest は後でフォームから再作成する）
+        process.days.all().delete()
+
+        first_day = None
+        for idx, day_data in enumerate(valid_days):
+            try:
+                block_date = datetime.strptime(day_data['date'], '%Y-%m-%d').date()
+            except (ValueError, KeyError):
+                continue
+
+            standby_str = (day_data.get('standby_time') or '').strip()
+            standby_time = None
+            if standby_str:
+                try:
+                    standby_time = datetime.strptime(standby_str, '%H:%M').time()
+                except ValueError:
+                    pass
+
+            pd = ProcessDay.objects.create(
+                process=process,
+                process_type=pt,
+                date=block_date,
+                start_time=standby_time,
+                order=idx,
+            )
+            if first_day is None:
+                first_day = pd
+
+            positions_data = day_data.get('positions', {})
+            for pos_slug, pos_data in positions_data.items():
+                qty_raw = pos_data.get('qty', '')
+                if qty_raw == '' or qty_raw is None:
+                    continue
+                try:
+                    qty = max(1, int(qty_raw))
+                except (ValueError, TypeError):
+                    continue
+                position = Position.objects.filter(slug=pos_slug).first()
+                if not position:
+                    continue
+                StaffRequest.objects.create(
+                    process_day=pd,
+                    position=position,
+                    quantity=qty,
+                    include_self=bool(pos_data.get('include_self', False)),
+                )
+
+        if first_day is None:
+            raise ValueError('有効な日付が1件もありませんでした。')
+
+        # ── 車両申請 ────────────────────────────────────────────────────
+        vehicle_id_str = request.POST.get('vehicle_id', '').strip()
+        vehicle = None
+        if vehicle_id_str:
+            try:
+                vehicle = Vehicle.objects.get(pk=int(vehicle_id_str))
+            except (Vehicle.DoesNotExist, ValueError):
+                pass
+
+        if vehicle:
+            req_time_str = request.POST.get('requested_time', '').strip()
+            arr_time_str = request.POST.get('arrival_requested_time', '').strip()
+            route_from = request.POST.get('route_from', '').strip()
+            route_to = request.POST.get('route_to', '').strip()
+            req_kind = request.POST.get('request_kind', VehicleRequest.RequestKind.LOAD_IN)
+            vehicle_date_str = request.POST.get('vehicle_date', '').strip()
+            # 荷役人数（車両申請がある場合のみ保存）
+            loading_qty_str = request.POST.get('loading_qty', '').strip()
+            unloading_qty_str = request.POST.get('unloading_qty', '').strip()
+            loading_include_self = request.POST.get('loading_include_self') == '1'
+            unloading_include_self = request.POST.get('unloading_include_self') == '1'
+
+            req_time = arr_time = vehicle_date = None
+            loading_qty = unloading_qty = None
+            try:
+                if req_time_str:
+                    req_time = datetime.strptime(req_time_str, '%H:%M').time()
+                if arr_time_str:
+                    arr_time = datetime.strptime(arr_time_str, '%H:%M').time()
+                if vehicle_date_str:
+                    vehicle_date = datetime.strptime(vehicle_date_str, '%Y-%m-%d').date()
+                if loading_qty_str:
+                    loading_qty = max(0, int(loading_qty_str))
+                if unloading_qty_str:
+                    unloading_qty = max(0, int(unloading_qty_str))
+            except ValueError:
+                pass
+
+            VehicleRequest.objects.create(
+                process_day=first_day,
+                requested_vehicle=vehicle,
+                request_kind=req_kind,
+                date=vehicle_date,
+                requested_time=req_time,
+                arrival_requested_time=arr_time,
+                route_from=route_from,
+                route_to=route_to,
+                loading_qty=loading_qty,
+                loading_include_self=loading_include_self,
+                unloading_qty=unloading_qty,
+                unloading_include_self=unloading_include_self,
+            )
+
+        # 備考をブロック（Process）に保存
+        note = request.POST.get('note', '').strip()
+        if note != process.note:
+            process.note = note
+            process.save(update_fields=['note'])
+
+
+class ProcessBlockDeleteView(ProcessEditPermissionMixin, LoginRequiredMixin, View):
+    """工程ブロックの削除"""
+
+    def post(self, request, process_pk):
+        process = get_object_or_404(Process.objects.select_related('production'), pk=process_pk)
+        production = process.production
+        title = process.title
+        process.delete()
+        messages.success(request, f'「{title}」を削除しました。')
+        return redirect('productions:detail', pk=production.pk)

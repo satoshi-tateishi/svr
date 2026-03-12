@@ -34,18 +34,15 @@
         {% endif %}
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">日付</label>
-          {{ form.date }}
-          {% if form.date.errors %}
-            <p class="mt-1 text-xs text-red-600">{{ form.date.errors.0 }}</p>
-          {% endif %}
+      <div>
+        <div class="flex items-baseline gap-2 mb-1">
+          <label class="text-xs font-bold text-gray-500 uppercase">日付</label>
+          <span class="text-[10px] text-gray-400">（未定のまま保存可）</span>
         </div>
-        <div>
-          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">表示順 (order)</label>
-          {{ form.order }}
-        </div>
+        {{ form.date }}
+        {% if form.date.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.date.errors.0 }}</p>
+        {% endif %}
       </div>
 
       <div>

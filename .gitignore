@@ -38,6 +38,7 @@ keys/
 *.swp
 *.swo
 *~
+sample/
 
 # OS
 .DS_Store

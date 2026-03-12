@@ -52,7 +52,6 @@ class ProcessDayForm(forms.ModelForm):
             'location',
             'start_time',
             'end_time',
-            'order',
             'note',
         ]
         widgets = {
@@ -61,12 +60,12 @@ class ProcessDayForm(forms.ModelForm):
             'end_time': forms.TimeInput(attrs={'type': 'time', 'class': _CSS_INPUT}),
             'location': forms.TextInput(attrs={'class': _CSS_INPUT}),
             'process_type': forms.Select(attrs={'class': _CSS_SELECT}),
-            'order': forms.NumberInput(attrs={'class': _CSS_INPUT}),
             'note': forms.Textarea(attrs={'rows': 3, 'class': _CSS_TEXTAREA}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['date'].required = False
 
         # カテゴリーの定義（順序とラベル）
         category_defs = {

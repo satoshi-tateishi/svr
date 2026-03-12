@@ -1,161 +1,109 @@
-# 工程テンプレートの定義（実務準拠版 v5）
+# 工程テンプレートの定義（紙フォーム「車及び人員手配書」準拠版）
 
-# ロケーションのグループ定義
-LOCATION_GROUPS = {
-    'rehearsal': {'label': '稽古場', 'default_slots': 2},
-    'venue': {'label': '劇場', 'default_slots': 2},
-    'warehouse': {'label': '倉庫', 'default_slots': 1},
-    'other': {'label': 'その他', 'default_slots': 1},
-}
-
-# 基本ブロック（汎用的な「型」）
-BASIC_BLOCKS = [
+# ブロック定義
+# mode:
+#   'single_day'    : 単日工程（日付・人員・車両を持つ）
+#   'sumida_check'  : すみだ便必要/不要フラグのみ
+#   'kizai_standby' : 機材スタンバイ助っ人フラグ + 人数
+#   'memo'          : 自由備考テキストのみ
+SETUP_BLOCKS = [
     {
         'key': 'rehearsal_setup',
         'label': '稽古場仕込み',
-        'mode': 'date_range_same_task',
-        'location_group': 'rehearsal',
-        'tasks': ['rehearsal-setup'],
+        'mode': 'single_day',
+        'icon': 'fa-solid fa-screwdriver-wrench',
+        'color': 'indigo',
+        'description': '車両申請・積み込み・搬入・仕込み人員',
         'default_enabled': True,
     },
     {
-        'key': 'rehearsal',
-        'label': '稽古',
-        'mode': 'date_range_same_task',
-        'location_group': 'rehearsal',
-        'tasks': ['rehearsal'],
+        'key': 'sumida_check',
+        'label': 'すみだものチェック',
+        'mode': 'sumida_check',
+        'icon': 'fa-solid fa-warehouse',
+        'color': 'sky',
+        'description': 'すみだ便必要/不要',
+        'default_enabled': True,
+    },
+    {
+        'key': 'kizai_standby',
+        'label': '本番機材スタンバイ',
+        'mode': 'kizai_standby',
+        'icon': 'fa-solid fa-person-digging',
+        'color': 'amber',
+        'description': '助っ人必要/不要・人数',
         'default_enabled': True,
     },
     {
         'key': 'rehearsal_strike',
         'label': '稽古場バラシ',
         'mode': 'single_day',
-        'location_group': 'rehearsal',
-        'tasks': ['rehearsal-strike'],
+        'icon': 'fa-solid fa-box-open',
+        'color': 'gray',
+        'description': 'バラシ人員・車両申請',
+        'default_enabled': True,
+    },
+    {
+        'key': 'memo_1',
+        'label': '備考・メモ1',
+        'mode': 'memo',
+        'icon': 'fa-solid fa-note-sticky',
+        'color': 'yellow',
+        'description': '自由記入欄',
         'default_enabled': True,
     },
     {
         'key': 'theatre_setup',
         'label': '劇場仕込み',
-        'mode': 'date_range_same_task',
-        'location_group': 'venue',
-        'tasks': ['theatre-setup'],
-        'default_enabled': True,
-    },
-    {
-        'key': 'stage_rehearsal',
-        'label': '劇場舞台稽古',
-        'mode': 'date_range_same_task',
-        'location_group': 'venue',
-        'tasks': ['stage-rehearsal'],
-        'default_enabled': True,
-    },
-    {
-        'key': 'performance',
-        'label': '本番',
-        'mode': 'date_range_performance',
-        'location_group': 'venue',
-        'tasks': ['performance'],
+        'mode': 'single_day',
+        'icon': 'fa-solid fa-building-columns',
+        'color': 'purple',
+        'description': '車両申請・搬入・仕込み・舞台稽古・初日人員',
         'default_enabled': True,
     },
     {
         'key': 'theatre_strike',
         'label': '劇場バラシ',
         'mode': 'single_day',
-        'location_group': 'venue',
-        'tasks': ['theatre-strike'],
+        'icon': 'fa-solid fa-truck-ramp-box',
+        'color': 'gray',
+        'description': 'バラシ人員・車両申請',
         'default_enabled': True,
     },
-]
-
-# 補助ブロック（任意追加・物流・イベント）
-AUXILIARY_BLOCKS = [
     {
-        'key': 'kizai_standby_rehearsal',
-        'label': '機材スタンバイ(稽古)',
-        'mode': 'single_day',
-        'location_group': 'rehearsal',
-        'tasks': ['kizai-standby'],
+        'key': 'memo_2',
+        'label': '備考・メモ2',
+        'mode': 'memo',
+        'icon': 'fa-solid fa-note-sticky',
+        'color': 'yellow',
+        'description': '自由記入欄',
         'default_enabled': False,
     },
     {
-        'key': 'kizai_standby_performance',
-        'label': '機材スタンバイ(本番)',
+        'key': 'travel_load',
+        'label': '旅荷積み',
         'mode': 'single_day',
-        'location_group': 'venue',
-        'tasks': ['kizai-standby'],
+        'icon': 'fa-solid fa-train',
+        'color': 'teal',
+        'description': '旅行荷物の積み込み・車両申請',
         'default_enabled': False,
     },
     {
-        'key': 'kizai_standby_travel',
-        'label': '機材スタンバイ(旅)',
+        'key': 'travel_unload',
+        'label': '旅荷降ろし',
         'mode': 'single_day',
-        'location_group': 'other',
-        'tasks': ['kizai-standby'],
+        'icon': 'fa-solid fa-dolly',
+        'color': 'teal',
+        'description': '旅行荷物の荷降ろし・車両申請',
         'default_enabled': False,
     },
     {
-        'key': 'warehouse_load',
-        'label': '倉庫荷積み',
-        'mode': 'single_day',
-        'location_group': 'warehouse',
-        'tasks': ['warehouse-load'],
-        'default_enabled': False,
-    },
-    {
-        'key': 'warehouse_unload',
-        'label': '倉庫荷降ろし',
-        'mode': 'single_day',
-        'location_group': 'warehouse',
-        'tasks': ['warehouse-unload'],
-        'default_enabled': False,
-    },
-    {
-        'key': 'theatre_unload',
-        'label': '劇場荷降ろし',
-        'mode': 'single_day',
-        'location_group': 'venue',
-        'tasks': ['theatre-unload'],
-        'default_enabled': False,
-    },
-    {
-        'key': 'transport',
-        'label': '移動',
-        'mode': 'single_day',
-        'location_group': 'other',
-        'tasks': ['transport'],
-        'default_enabled': False,
-    },
-    {
-        'key': 'recording',
-        'label': '録音',
-        'mode': 'single_day',
-        'location_group': 'rehearsal',
-        'tasks': ['recording'],
-        'default_enabled': False,
-    },
-    {
-        'key': 'press_conference',
-        'label': '記者会見',
-        'mode': 'single_day',
-        'location_group': 'other',
-        'tasks': ['press'],
-        'default_enabled': False,
-    },
-    {
-        'key': 'reload',
-        'label': '積み替え',
-        'mode': 'single_day',
-        'location_group': 'other',
-        'tasks': ['reload'],
-        'default_enabled': False,
-    },
-    {
-        'key': 'final_unload',
-        'label': '最終荷降ろし',
-        'mode': 'single_day',
-        'location_group': 'warehouse',
-        'tasks': ['final-unload'],
+        'key': 'memo_3',
+        'label': '備考・メモ3',
+        'mode': 'memo',
+        'icon': 'fa-solid fa-note-sticky',
+        'color': 'yellow',
+        'description': '自由記入欄',
         'default_enabled': False,
     },
 ]
@@ -163,6 +111,46 @@ AUXILIARY_BLOCKS = [
 PRODUCTION_TEMPLATES = {
     'standard': {
         'label': '標準公演テンプレート',
-        'blocks': BASIC_BLOCKS + AUXILIARY_BLOCKS,
+        'blocks': SETUP_BLOCKS,
     }
+}
+
+# ProcessBlockEditView で各ブロックが生成する ProcessType スラッグのマッピング
+BLOCK_PROCESS_TYPE_MAP = {
+    'rehearsal_setup': 'rehearsal-setup',
+    'rehearsal_strike': 'rehearsal-strike',
+    'theatre_setup': 'theatre-setup',
+    'theatre_strike': 'theatre-strike',
+    'travel_load': 'warehouse-load',
+    'travel_unload': 'warehouse-unload',
+}
+
+# ProcessBlockEditView で使用する Position スラッグのマッピング
+BLOCK_POSITION_MAP = {
+    'rehearsal_setup': {
+        'setup-crew': '仕込み人数',  # 稽古場仕込み人員
+    },
+    'rehearsal_strike': {
+        'strike-crew': 'バラシ',  # 稽古場バラシ人員
+        'loading': '積み込み',  # 稽古場搬出人員
+        'unloading': '荷降ろし',  # 倉庫荷降ろし人員
+    },
+    'theatre_setup': {
+        'carry-in': '搬入',  # 劇場搬入人員
+        'setup-crew': '仕込み',  # 劇場仕込み人員
+    },
+    'theatre_strike': {
+        'strike-crew': 'バラシ',  # 劇場バラシ人員
+        'loading': '積み込み',  # 劇場搬出人員
+        'unloading': '荷降ろし',  # 倉庫荷降ろし人員
+    },
+    'travel_load': {
+        'loading': '積み込み',  # 旅荷積み人員
+    },
+    'travel_unload': {
+        'unloading': '荷降ろし',  # 旅荷降ろし人員
+    },
+    'kizai_standby': {
+        'helper': '助っ人',
+    },
 }

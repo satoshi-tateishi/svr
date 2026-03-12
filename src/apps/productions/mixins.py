@@ -1,6 +1,6 @@
 from django.shortcuts import get_object_or_404
 
-from .models import ProcessDay
+from .models import Process, ProcessDay
 from .services.permission_response import permission_denied_response
 from .services.permissions import can_edit_requests, can_manage_assignments
 
@@ -12,6 +12,18 @@ class RequestEditPermissionMixin:
         day_pk = kwargs.get('day_pk')
         day = get_object_or_404(ProcessDay.objects.select_related('process__production'), pk=day_pk)
         production = day.process.production
+        if not can_edit_requests(request.user, production):
+            return permission_denied_response(request, '手配申請の編集権限がありません。')
+        return super().dispatch(request, *args, **kwargs)
+
+
+class ProcessEditPermissionMixin:
+    """Process から Production を取得して can_edit_requests を確認する Mixin"""
+
+    def dispatch(self, request, *args, **kwargs):
+        process_pk = kwargs.get('process_pk')
+        process = get_object_or_404(Process.objects.select_related('production'), pk=process_pk)
+        production = process.production
         if not can_edit_requests(request.user, production):
             return permission_denied_response(request, '手配申請の編集権限がありません。')
         return super().dispatch(request, *args, **kwargs)

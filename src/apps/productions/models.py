@@ -165,16 +165,25 @@ class ProductionTemplate(models.Model):
 
 
 class Process(models.Model):
-    """公演ブロック（大阪公演、東京公演、移動、倉庫作業期間など）"""
+    """公演ブロック（稽古場仕込み、劇場仕込み、旅荷積み等）"""
 
     production = models.ForeignKey(
         Production, on_delete=models.CASCADE, related_name='processes', verbose_name='公演'
     )
     title = models.CharField(
-        max_length=100, verbose_name='ブロック名', help_text='例: 大阪公演、稽古、倉庫作業'
+        max_length=100, verbose_name='ブロック名', help_text='例: 稽古場仕込み、劇場仕込み'
+    )
+    block_key = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        verbose_name='ブロックキー',
+        help_text='テンプレート定義のキー（rehearsal_setup等）',
     )
     order = models.PositiveIntegerField(default=0, verbose_name='表示順')
     note = models.TextField(blank=True, verbose_name='備考')
+    sumida_required = models.BooleanField(null=True, blank=True, verbose_name='すみだ便必要')
+    assistant_required = models.BooleanField(null=True, blank=True, verbose_name='助っ人必要')
 
     class Meta:
         verbose_name = '工程ブロック'
@@ -194,7 +203,7 @@ class ProcessDay(models.Model):
         Process, on_delete=models.CASCADE, related_name='days', verbose_name='工程ブロック'
     )
     process_type = models.ForeignKey(ProcessType, on_delete=models.PROTECT, verbose_name='工程種別')
-    date = models.DateField(verbose_name='実施日')
+    date = models.DateField(null=True, blank=True, verbose_name='実施日')
     location = models.CharField(max_length=200, blank=True, default='', verbose_name='場所')
 
     start_time = models.TimeField(null=True, blank=True, verbose_name='開始時間')
@@ -215,14 +224,19 @@ class ProcessDay(models.Model):
         ]
 
     def __str__(self):
-        return f'{self.date} {self.process_type.name} ({self.process.title})'
+        date_str = self.date.isoformat() if self.date else '未定'
+        return f'{date_str} {self.process_type.name} ({self.process.title})'
 
     @property
     def start_datetime(self):
+        if self.date is None:
+            return None
         return datetime.combine(self.date, self.start_time or time.min)
 
     @property
     def end_datetime(self):
+        if self.date is None:
+            return None
         return datetime.combine(self.date, self.end_time or time.max)
 
 
@@ -237,7 +251,8 @@ class StaffRequest(models.Model):
     )
     position = models.ForeignKey(Position, on_delete=models.PROTECT, verbose_name='ポジション')
 
-    quantity = models.PositiveIntegerField(default=1, verbose_name='必要人数')
+    quantity = models.PositiveIntegerField(default=1, verbose_name='希望人数')
+    include_self = models.BooleanField(default=False, verbose_name='本人を含む')
 
     # 空欄の場合は工程時間（ProcessDay の start_time / end_time）に準ずる
     start_time = models.TimeField(null=True, blank=True, verbose_name='開始時間')
@@ -284,15 +299,29 @@ class VehicleRequest(models.Model):
         default=RequestKind.LOAD_IN,
         verbose_name='申請種別',
     )
+    # 工程日と配車日が異なる場合に指定（空白=工程日に準ずる）
+    date = models.DateField(null=True, blank=True, verbose_name='配車日')
     requested_time = models.TimeField(null=True, blank=True, verbose_name='配車希望時間')
     arrival_requested_time = models.TimeField(null=True, blank=True, verbose_name='到着希望時間')
     route_from = models.CharField(max_length=200, blank=True, default='', verbose_name='出発地')
     route_to = models.CharField(max_length=200, blank=True, default='', verbose_name='目的地')
     note = models.TextField(blank=True, default='', verbose_name='備考')
+    # 荷役人数申請（車両申請がある場合のみ有効）
+    loading_qty = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='荷積み人数')
+    loading_include_self = models.BooleanField(default=False, verbose_name='荷積み本人含む')
+    unloading_qty = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name='荷降ろし人数'
+    )
+    unloading_include_self = models.BooleanField(default=False, verbose_name='荷降ろし本人含む')
 
     class Meta:
         verbose_name = '車両申請'
         verbose_name_plural = '車両申請'
+
+    @property
+    def effective_date(self):
+        """配車日。date フィールドが設定されていればそちらを優先する。"""
+        return self.date or (self.process_day.date if self.process_day_id else None)
 
     def __str__(self):
         return self.requested_vehicle.name

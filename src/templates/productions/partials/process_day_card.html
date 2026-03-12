@@ -1,12 +1,12 @@
 <div id="process-day-{{ day.id }}"
      class="bg-white rounded-2xl shadow-sm border border-gray-100 p-0 mb-4 overflow-hidden relative">
-  
+
   <!-- クリック領域をヘッダー（工程基本情報）に限定 -->
-  <div class="p-5 pb-4 hover:bg-gray-50 transition-colors cursor-pointer"
+  <div class="px-5 pt-5 pb-4 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
        hx-get="{% url 'productions:process_day_edit' day.id %}"
        hx-target="#modal"
        hx-swap="innerHTML">
-    
+
     <div class="flex justify-between items-start">
       <div class="flex flex-col">
         <div class="flex items-center gap-2 mb-1">
@@ -17,7 +17,8 @@
           <i class="fa-solid fa-location-dot"></i> {{ day.location|default:"場所未設定" }}
         </span>
       </div>
-      <div class="text-right">
+      <!-- 右側: 時間バッジ + 編集ヒント -->
+      <div class="flex flex-col items-end gap-1.5 flex-none ml-3">
         <span class="inline-block px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-[10px] font-black tracking-tight">
           {% if day.start_time and day.end_time %}
             {{ day.start_time|time:"H:i" }} - {{ day.end_time|time:"H:i" }}
@@ -29,6 +30,9 @@
             終日
           {% endif %}
         </span>
+        <span class="text-[9px] text-gray-300 font-bold flex items-center gap-0.5">
+          <i class="fa-solid fa-pen text-[8px]"></i> 工程を編集
+        </span>
       </div>
     </div>
 
@@ -39,123 +43,76 @@
     {% endif %}
   </div>
 
-  <!-- 人員・車両セクション（独立した領域） -->
-  <div class="px-5 pb-5 pt-4 border-t border-gray-50 space-y-5">
-    
-    <!-- 人員手配セクション -->
-    <div onclick="event.stopPropagation()">
-      <div class="flex items-center justify-between mb-2.5">
-        <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-          <i class="fa-solid fa-users text-indigo-300"></i> 人員手配
-        </h4>
-        <button type="button" 
-                onclick="event.stopPropagation()"
-                hx-get="{% url 'productions:staff_requests_bulk_edit' day.id %}"
-                hx-target="#modal"
-                hx-swap="innerHTML"
-                class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full hover:bg-indigo-100 transition-colors">
-          編集
-        </button>
-      </div>
+  <!-- 人員・車両セクション（コンパクト横並び） -->
+  <div class="px-4 pb-4 pt-3 border-t border-gray-50 space-y-2.5">
 
-      <div class="space-y-1.5">
+    <!-- 人員手配行 -->
+    <div class="flex items-start gap-2" onclick="event.stopPropagation()">
+      <span class="text-[10px] font-black text-gray-300 uppercase tracking-wide flex-none w-12 pt-1">
+        <i class="fa-solid fa-users mr-0.5"></i> 人員
+      </span>
+      <div class="flex flex-wrap gap-1.5 flex-1 min-w-0"
+           onclick="event.stopPropagation()"
+           hx-get="{% url 'productions:staff_requests_bulk_edit' day.id %}"
+           hx-target="#modal"
+           hx-swap="innerHTML">
         {% for req in day.staff_requests.all %}
-          <div onclick="event.stopPropagation()"
-               class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-transparent hover:border-indigo-100 transition-all cursor-pointer"
-               hx-get="{% url 'productions:staff_requests_bulk_edit' day.id %}"
-               hx-target="#modal"
-               hx-swap="innerHTML">
-            <div class="flex flex-col">
-              <span class="text-xs font-bold text-gray-700">{{ req.position.name }}</span>
-              {% if req.note %}
-                <span class="text-[10px] text-gray-400 leading-tight mt-0.5">{{ req.note }}</span>
-              {% endif %}
-            </div>
-            <span class="text-xs font-black text-indigo-600 bg-white px-2 py-1 rounded-lg border border-indigo-50 shadow-sm">x{{ req.quantity }}</span>
-          </div>
+          <span class="inline-flex items-baseline gap-1 text-[11px] bg-gray-50 rounded-lg px-2 py-1 border border-gray-100 cursor-pointer hover:border-indigo-100 transition-colors">
+            <span class="font-bold text-gray-700">{{ req.position.name }}</span>
+            <span class="font-black text-indigo-600">×{{ req.quantity }}</span>
+          </span>
         {% empty %}
-          <div class="py-3 px-4 border-2 border-dashed border-gray-100 rounded-xl text-center cursor-pointer hover:bg-gray-50 transition-colors"
-               onclick="event.stopPropagation()"
-               hx-get="{% url 'productions:staff_requests_bulk_edit' day.id %}"
-               hx-target="#modal"
-               hx-swap="innerHTML">
-            <span class="text-[10px] font-bold text-gray-300 italic">手配リクエスト未登録</span>
-          </div>
+          <span class="text-[10px] text-gray-300 italic py-1">未登録</span>
         {% endfor %}
       </div>
+      <button type="button"
+              onclick="event.stopPropagation()"
+              hx-get="{% url 'productions:staff_requests_bulk_edit' day.id %}"
+              hx-target="#modal"
+              hx-swap="innerHTML"
+              class="flex-none text-[10px] font-bold text-indigo-400 hover:text-indigo-600 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors">
+        編集
+      </button>
     </div>
-    
-    <!-- 車両申請セクション -->
-    <div onclick="event.stopPropagation()">
-      <div class="flex items-center justify-between mb-2.5">
-        <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-          <i class="fa-solid fa-truck-front text-indigo-300"></i> 車両申請
-        </h4>
-        <button type="button"
-                onclick="event.stopPropagation()"
-                hx-get="{% url 'productions:vehicle_requests_bulk_edit' day.id %}"
-                hx-target="#modal"
-                hx-swap="innerHTML"
-                class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full hover:bg-indigo-100 transition-colors">
-          編集
-        </button>
-      </div>
 
-      <div class="space-y-1.5">
+    <!-- 車両申請行 -->
+    <div class="flex items-start gap-2" onclick="event.stopPropagation()">
+      <span class="text-[10px] font-black text-gray-300 uppercase tracking-wide flex-none w-12 pt-1">
+        <i class="fa-solid fa-truck mr-0.5"></i> 車両
+      </span>
+      <div class="flex flex-wrap gap-1.5 flex-1 min-w-0"
+           onclick="event.stopPropagation()"
+           hx-get="{% url 'productions:vehicle_requests_bulk_edit' day.id %}"
+           hx-target="#modal"
+           hx-swap="innerHTML">
         {% for req in day.vehicle_requests.all %}
-          <div onclick="event.stopPropagation()"
-               class="flex items-start p-2.5 bg-gray-50 rounded-xl border border-transparent hover:border-indigo-100 transition-all cursor-pointer"
-               hx-get="{% url 'productions:vehicle_requests_bulk_edit' day.id %}"
-               hx-target="#modal"
-               hx-swap="innerHTML">
-            <div class="flex flex-col w-full">
-              {# 1行目: 車両名 #}
-              <span class="text-xs font-bold text-gray-700">{{ req.requested_vehicle.name }}</span>
-              {# 2行目: 申請種別のみ #}
-              <span class="text-[10px] text-indigo-500 font-medium leading-tight mt-0.5">{{ req.get_request_kind_display }}</span>
-              {# 時刻・地名を左右ブロック＋矢印で対応表示（片方欠損にも対応） #}
-              {% if req.requested_time or req.arrival_requested_time or req.route_from or req.route_to %}
-                <div class="grid grid-cols-[1fr_auto_1fr] gap-x-1.5 items-center mt-1.5">
-                  {# 左ブロック: 配車希望時間 + 出発地 #}
-                  <div class="bg-white rounded-lg border border-gray-100 shadow-sm px-2 py-1.5 flex flex-col gap-0.5">
-                    {% if req.requested_time %}
-                      <span class="text-[11px] font-bold text-gray-600 leading-tight">配車 {{ req.requested_time|time:"H:i" }}</span>
-                    {% endif %}
-                    {% if req.route_from %}
-                      <span class="text-[10px] text-gray-400 leading-tight">{{ req.route_from }}</span>
-                    {% endif %}
-                  </div>
-                  {# 中央: 矢印アイコン #}
-                  <div class="flex items-center justify-center">
-                    <i class="fa-solid fa-arrow-right text-[10px] text-gray-300"></i>
-                  </div>
-                  {# 右ブロック: 到着希望時間 + 目的地 #}
-                  <div class="bg-white rounded-lg border border-gray-100 shadow-sm px-2 py-1.5 flex flex-col gap-0.5">
-                    {% if req.arrival_requested_time %}
-                      <span class="text-[11px] font-bold text-gray-600 leading-tight">着 {{ req.arrival_requested_time|time:"H:i" }}</span>
-                    {% endif %}
-                    {% if req.route_to %}
-                      <span class="text-[10px] text-gray-400 leading-tight">{{ req.route_to }}</span>
-                    {% endif %}
-                  </div>
-                </div>
-              {% endif %}
-              {# note #}
-              {% if req.note %}
-                <span class="text-[10px] text-gray-400 leading-tight mt-0.5">{{ req.note }}</span>
-              {% endif %}
-            </div>
-          </div>
+          <span class="inline-flex items-center gap-1 text-[11px] bg-gray-50 rounded-lg px-2 py-1 border border-gray-100 cursor-pointer hover:border-indigo-100 transition-colors">
+            <i class="fa-solid fa-truck text-gray-300 text-[9px]"></i>
+            <span class="font-bold text-gray-700">{{ req.requested_vehicle.name }}</span>
+            <span class="text-indigo-500">{{ req.get_request_kind_display }}</span>
+            {% if req.requested_time %}
+              <span class="text-gray-400">{{ req.requested_time|time:"H:i" }}</span>
+            {% endif %}
+            {% if req.route_from or req.route_to %}
+              <span class="text-gray-400 flex items-center gap-0.5">
+                {% if req.route_from %}<span>{{ req.route_from }}</span>{% endif %}
+                {% if req.route_from and req.route_to %}<i class="fa-solid fa-arrow-right text-[8px]"></i>{% endif %}
+                {% if req.route_to %}<span>{{ req.route_to }}</span>{% endif %}
+              </span>
+            {% endif %}
+          </span>
         {% empty %}
-          <div class="py-3 px-4 border-2 border-dashed border-gray-100 rounded-xl text-center cursor-pointer hover:bg-gray-50 transition-colors"
-               onclick="event.stopPropagation()"
-               hx-get="{% url 'productions:vehicle_requests_bulk_edit' day.id %}"
-               hx-target="#modal"
-               hx-swap="innerHTML">
-            <span class="text-[10px] font-bold text-gray-300 italic">車両申請未登録</span>
-          </div>
+          <span class="text-[10px] text-gray-300 italic py-1">未登録</span>
         {% endfor %}
       </div>
+      <button type="button"
+              onclick="event.stopPropagation()"
+              hx-get="{% url 'productions:vehicle_requests_bulk_edit' day.id %}"
+              hx-target="#modal"
+              hx-swap="innerHTML"
+              class="flex-none text-[10px] font-bold text-indigo-400 hover:text-indigo-600 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors">
+        編集
+      </button>
     </div>
 
   </div>

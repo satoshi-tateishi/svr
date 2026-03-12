@@ -1,7 +1,6 @@
 import json
 from datetime import date, datetime
 from datetime import time as dt_time
-from itertools import groupby
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -38,6 +37,71 @@ from .templates import (
     BLOCK_PROCESS_TYPE_MAP,
     SETUP_BLOCKS,
 )
+
+
+def _build_process_blocks(processes_qs):
+    """工程ブロック表示用データ構造を構築する。
+
+    processes_qs は prefetch_related('days__staff_requests__position',
+    'days__vehicle_requests__requested_vehicle') 済みであること。
+
+    将来: BLOCK_POSITION_MAP は apps/productions/templates.py にあるが、
+    責務としては constants / definitions モジュールへ寄せる余地がある。
+    """
+    # 循環 import 回避のため local import（将来 constants 化の際に整理）
+    from .templates import BLOCK_POSITION_MAP  # noqa: PLC0415
+
+    result = []
+    for proc in processes_qs:
+        block_key = proc.block_key
+        position_map = BLOCK_POSITION_MAP.get(block_key, {})
+
+        # 【拡張性注記】vehicle_requests は "全件" 収集する。
+        # 現状の block_edit フォームは1件編集前提（暫定）だが、
+        # 将来的に複数車両申請ブロックを追加できるよう、表示層は常にリストで扱う。
+        vehicles: list = []
+        day_entries = []
+
+        for day in sorted(proc.days.all(), key=lambda d: (d.date or date.max, d.order)):
+            staff_by_slug = {sr.position.slug: sr for sr in day.staff_requests.all()}
+            staff_rows = [
+                {
+                    'label': label,
+                    'qty': staff_by_slug[slug].quantity,
+                    'include_self': staff_by_slug[slug].include_self,
+                }
+                for slug, label in position_map.items()
+                if slug in staff_by_slug
+            ]
+            day_entries.append(
+                {
+                    'date': day.date,
+                    'standby_time': day.start_time,
+                    'staff_rows': staff_rows,
+                }
+            )
+            vehicles.extend(list(day.vehicle_requests.all()))
+
+        # 表示順を安定化: 配車日 → 配車希望時間 → pk
+        vehicles.sort(
+            key=lambda v: (
+                v.effective_date or date.max,
+                v.requested_time or dt_time.max,
+                v.pk,
+            )
+        )
+
+        result.append(
+            {
+                'process': proc,
+                'block_key': block_key,
+                'days': day_entries,
+                # 【暫定】block_edit フォームは vehicle 1件前提。複数件ある場合も全件表示する。
+                # 将来: 車両申請専用ブロックが追加されたとき vehicles リスト全件を活用する。
+                'vehicles': vehicles,
+            }
+        )
+    return result
 
 
 class StaffRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin, View):
@@ -593,48 +657,26 @@ class ProductionDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # process_days をリスト化して1回のクエリで評価
-        all_days = list(
-            ProcessDay.objects.filter(process__production=self.object)
-            .select_related('process', 'process_type')
-            .prefetch_related(
-                'staff_requests',
-                'staff_requests__position',
-                'vehicle_requests',
-                'vehicle_requests__requested_vehicle',
-            )
-            .order_by('order', 'start_time')
-        )
 
-        # 日付あり / なし に分離
-        undated_days = [d for d in all_days if d.date is None]
-        dated_days = sorted(
-            [d for d in all_days if d.date is not None],
-            key=lambda x: (x.date, x.order, x.start_time or dt_time.min),
-        )
-
-        # ProcessDay の min/max を production に注入（actual_start/end_date の DB クエリを防ぐ）
-        dates = [d.date for d in dated_days]
-        self.object.process_min_date = min(dates) if dates else None
-        self.object.process_max_date = max(dates) if dates else None
-
-        grouped_days = []
-        for day_date, group in groupby(dated_days, key=lambda x: x.date):
-            grouped_days.append({'date': day_date, 'days': list(group)})
-
-        context['grouped_days'] = grouped_days
-        context['undated_days'] = undated_days
-        context['undated_group'] = {'date': None, 'days': undated_days}
-
-        # 工程ブロック一覧（ブロック別ビュー用）
-        context['processes'] = list(
+        # 工程ブロックを N+1 なしで一括取得
+        # days__process_type は互換性のため残す（ブロック概要カードから将来削除予定）
+        processes_qs = list(
             self.object.processes.prefetch_related(
                 'days',
                 'days__process_type',
-                'days__staff_requests',
-                'days__vehicle_requests',
+                'days__staff_requests__position',
+                'days__vehicle_requests__requested_vehicle',
             ).order_by('order')
         )
+
+        # process_min/max_date を注入（actual_start/end_date の追加 DB クエリを防ぐ）
+        all_dated = [d for proc in processes_qs for d in proc.days.all() if d.date]
+        dates = [d.date for d in all_dated]
+        self.object.process_min_date = min(dates) if dates else None
+        self.object.process_max_date = max(dates) if dates else None
+
+        context['processes'] = processes_qs  # 旧ブロック概要カード用（互換性のため残す）
+        context['process_blocks'] = _build_process_blocks(processes_qs)
 
         # 担当者一覧（Role.choices 定義順で並べるため Python 側でソート）
         role_order = {role: idx for idx, (role, _) in enumerate(ProductionMember.Role.choices)}
@@ -644,6 +686,28 @@ class ProductionDetailView(LoginRequiredMixin, DetailView):
             key=lambda m: (role_order.get(m.role, 99), m.start_date or date.min),
         )
         return context
+
+
+class ProductionProcessesPartialView(LoginRequiredMixin, View):
+    """HTMX 用: processes-section の部分再描画"""
+
+    def get(self, request, pk):
+        production = get_object_or_404(Production, pk=pk)
+        processes_qs = list(
+            production.processes.prefetch_related(
+                'days',
+                'days__staff_requests__position',
+                'days__vehicle_requests__requested_vehicle',
+            ).order_by('order')
+        )
+        return render(
+            request,
+            'productions/partials/processes_section.html',
+            {
+                'production': production,
+                'process_blocks': _build_process_blocks(processes_qs),
+            },
+        )
 
 
 class ProductionSetupView(LoginRequiredMixin, View):
@@ -1114,6 +1178,9 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
             pk=process_pk,
         )
         ctx = self._build_context(process)
+        # HTMX リクエストの場合はモーダル用テンプレートを返す
+        if request.headers.get('HX-Request'):
+            return render(request, 'productions/process_block_edit_modal.html', ctx)
         return render(request, 'productions/process_block_edit.html', ctx)
 
     def post(self, request, process_pk):
@@ -1132,9 +1199,25 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
                 else:
                     self._save_single_day_block(request, process)
 
+            # HTMX モーダル内保存成功: modal をクリアし processBlockSaved イベントを発火
+            if request.headers.get('HX-Request'):
+                response = HttpResponse('<div></div>')
+                response['HX-Trigger'] = 'processBlockSaved'
+                return response
+
             messages.success(request, f'「{process.title}」を保存しました。')
             return redirect('productions:detail', pk=production.pk)
         except ValueError as e:
+            if request.headers.get('HX-Request'):
+                ctx = self._build_context(process)
+                ctx['post_data'] = request.POST
+                ctx['error_message'] = str(e)
+                return render(
+                    request,
+                    'productions/process_block_edit_modal.html',
+                    ctx,
+                    status=422,
+                )
             messages.error(request, str(e))
             ctx = self._build_context(process)
             ctx['post_data'] = request.POST

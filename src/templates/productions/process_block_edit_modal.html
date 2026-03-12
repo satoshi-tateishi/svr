@@ -1,0 +1,102 @@
+<!-- モーダル用ラッパー（base.html の #modal に swap される） -->
+<div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+     x-data @click.self="$el.remove()">
+  <div class="bg-white w-full sm:rounded-2xl sm:max-w-lg max-h-[90dvh] overflow-y-auto shadow-2xl">
+    <!-- モーダルヘッダー -->
+    <div class="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 z-10">
+      <h2 class="flex-1 text-base font-bold text-gray-900">{{ process.title }}</h2>
+      <button type="button" @click="$el.closest('[x-data]').remove()"
+              class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400
+                     hover:bg-gray-100 hover:text-gray-600 transition-colors">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- エラーメッセージ（バリデーションエラー時） -->
+    {% if error_message %}
+    <div class="mx-5 mt-4 p-3 rounded-xl bg-red-50 border border-red-100 text-sm font-bold text-red-700">
+      <i class="fa-solid fa-circle-exclamation mr-1"></i>{{ error_message }}
+    </div>
+    {% endif %}
+
+    <!-- フォーム本体: hx-post でモーダル内保存 -->
+    <form hx-post="{% url 'productions:block_edit' process.pk %}"
+          hx-target="#modal"
+          hx-swap="innerHTML">
+      {% csrf_token %}
+      <div class="px-5 pt-4 pb-2">
+        {% include "productions/partials/process_block_form.html" %}
+      </div>
+
+      <!-- 保存ボタン（モーダル内フッター） -->
+      <div class="sticky bottom-0 bg-white/90 backdrop-blur-md border-t border-gray-100 px-5 py-4 z-10">
+        <button type="submit"
+                class="w-full bg-indigo-600 text-white font-black py-3.5 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">
+          保存する
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# staffDaysApp を HTMX スクリプト評価で定義する（Alpine.js defer より先に実行される） #}
+<script>
+function staffDaysApp() {
+  return {
+    days: [],
+    positionList: [],
+
+    init() {
+      const daysEl = document.getElementById('days-data-json');
+      const posEl = document.getElementById('position-list-json');
+      const initialDays = daysEl ? JSON.parse(daysEl.textContent) : [];
+      const positionList = posEl ? JSON.parse(posEl.textContent) : [];
+
+      this.positionList = positionList;
+
+      const src = (Array.isArray(initialDays) && initialDays.length > 0) ? initialDays : [];
+      this.days = src.map(d => ({
+        date: d.date || '',
+        standby_time: d.standby_time || '',
+        positions: Object.fromEntries(
+          positionList.map(p => [p.slug, {
+            qty: (d.positions && d.positions[p.slug] != null)
+              ? d.positions[p.slug].qty : '',
+            include_self: (d.positions && d.positions[p.slug])
+              ? d.positions[p.slug].include_self : true,
+          }])
+        ),
+      }));
+      if (this.days.length === 0) this.addDay();
+    },
+
+    addDay() {
+      this.days.push({
+        date: '',
+        standby_time: '',
+        positions: Object.fromEntries(
+          this.positionList.map(p => [p.slug, { qty: '', include_self: true }])
+        ),
+      });
+    },
+
+    duplicateDay(idx) {
+      const copy = JSON.parse(JSON.stringify(this.days[idx]));
+      if (copy.date) {
+        const [y, m, d] = copy.date.split('-').map(Number);
+        const dt = new Date(y, m - 1, d + 1);
+        copy.date = [
+          dt.getFullYear(),
+          String(dt.getMonth() + 1).padStart(2, '0'),
+          String(dt.getDate()).padStart(2, '0'),
+        ].join('-');
+      }
+      this.days.splice(idx + 1, 0, copy);
+    },
+
+    removeDay(idx) {
+      if (this.days.length > 1) this.days.splice(idx, 1);
+    },
+  };
+}
+</script>

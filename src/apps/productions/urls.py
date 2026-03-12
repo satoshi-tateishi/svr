@@ -9,6 +9,11 @@ urlpatterns = [
     path('create/', views.ProductionCreateView.as_view(), name='create'),
     path('<int:pk>/', views.ProductionDetailView.as_view(), name='detail'),
     path('<int:pk>/setup/', views.ProductionSetupView.as_view(), name='setup'),
+    path(
+        '<int:pk>/processes-partial/',
+        views.ProductionProcessesPartialView.as_view(),
+        name='processes_partial',
+    ),
     path('templates/api/', views.ProductionTemplateListView.as_view(), name='template_api'),
     path('process-day/<int:pk>/edit/', views.ProcessDayEditView.as_view(), name='process_day_edit'),
     path(

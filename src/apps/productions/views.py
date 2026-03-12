@@ -1194,8 +1194,6 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
                     self._save_sumida_check(request, process)
                 elif block_key == 'kizai_standby':
                     self._save_kizai_standby(request, process)
-                elif block_key in ('memo_1', 'memo_2', 'memo_3'):
-                    self._save_memo(request, process)
                 else:
                     self._save_single_day_block(request, process)
 
@@ -1237,6 +1235,8 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
 
         position_map = BLOCK_POSITION_MAP.get(block_key, {})
         position_list = [{'slug': slug, 'label': label} for slug, label in position_map.items()]
+        if block_key == 'rehearsal_strike':
+            position_list = [p for p in position_list if p['slug'] not in ('loading', 'unloading')]
 
         days_data = []
         existing_vehicle = None
@@ -1280,12 +1280,14 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
     def _save_sumida_check(self, request, process):
         sumida = request.POST.get('sumida_required') == '1'
         process.sumida_required = sumida
-        process.save(update_fields=['sumida_required'])
+        process.note = request.POST.get('note', '').strip()
+        process.save(update_fields=['sumida_required', 'note'])
 
     def _save_kizai_standby(self, request, process):
         assistant = request.POST.get('assistant_required') == '1'
         process.assistant_required = assistant
-        process.save(update_fields=['assistant_required'])
+        process.note = request.POST.get('note', '').strip()
+        process.save(update_fields=['assistant_required', 'note'])
 
         if assistant:
             qty_str = request.POST.get('helper_quantity', '1').strip()
@@ -1322,11 +1324,6 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
         else:
             # 助っ人不要の場合は既存の ProcessDay ごと削除
             process.days.all().delete()
-
-    def _save_memo(self, request, process):
-        note = request.POST.get('note', '').strip()
-        process.note = note
-        process.save(update_fields=['note'])
 
     def _save_single_day_block(self, request, process):
         """single_day モードのブロック（仕込み・バラシ・旅荷積み等）を保存する"""

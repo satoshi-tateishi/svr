@@ -44,15 +44,6 @@ SETUP_BLOCKS = [
         'default_enabled': True,
     },
     {
-        'key': 'memo_1',
-        'label': '備考・メモ1',
-        'mode': 'memo',
-        'icon': 'fa-solid fa-note-sticky',
-        'color': 'yellow',
-        'description': '自由記入欄',
-        'default_enabled': True,
-    },
-    {
         'key': 'theatre_setup',
         'label': '劇場仕込み',
         'mode': 'single_day',
@@ -71,15 +62,6 @@ SETUP_BLOCKS = [
         'default_enabled': True,
     },
     {
-        'key': 'memo_2',
-        'label': '備考・メモ2',
-        'mode': 'memo',
-        'icon': 'fa-solid fa-note-sticky',
-        'color': 'yellow',
-        'description': '自由記入欄',
-        'default_enabled': False,
-    },
-    {
         'key': 'travel_load',
         'label': '旅荷積み',
         'mode': 'single_day',
@@ -95,15 +77,6 @@ SETUP_BLOCKS = [
         'icon': 'fa-solid fa-dolly',
         'color': 'teal',
         'description': '旅行荷物の荷降ろし・車両申請',
-        'default_enabled': False,
-    },
-    {
-        'key': 'memo_3',
-        'label': '備考・メモ3',
-        'mode': 'memo',
-        'icon': 'fa-solid fa-note-sticky',
-        'color': 'yellow',
-        'description': '自由記入欄',
         'default_enabled': False,
     },
 ]

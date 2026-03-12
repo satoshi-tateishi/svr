@@ -46,14 +46,6 @@
         <p class="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{{ pb.process.note }}</p>
       {% endif %}
 
-    {# ── 備考・メモ ── #}
-    {% elif pb.block_key == 'memo_1' or pb.block_key == 'memo_2' or pb.block_key == 'memo_3' %}
-      {% if pb.process.note %}
-        <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ pb.process.note }}</p>
-      {% else %}
-        <span class="text-amber-500 text-sm"><i class="fa-solid fa-circle-exclamation mr-1"></i>未入力</span>
-      {% endif %}
-
     {# ── 単日工程（仕込み / バラシ / 旅荷積み / 降ろし等） ── #}
     {% else %}
       {% if not pb.vehicles and not pb.days %}

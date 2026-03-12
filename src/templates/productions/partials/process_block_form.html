@@ -26,6 +26,12 @@
       </div>
     </label>
   </div>
+  <div class="mt-4">
+    <label class="block text-[10px] font-bold text-gray-500 mb-1">備考</label>
+    <textarea name="note" rows="3"
+              class="form-textarea block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500"
+              placeholder="備考があれば入力">{{ process.note|default:'' }}</textarea>
+  </div>
 </div>
 
 {% elif block_key == 'kizai_standby' %}
@@ -56,33 +62,28 @@
       </div>
     </label>
   </div>
-</div>
-
-{% elif block_key == 'memo_1' or block_key == 'memo_2' or block_key == 'memo_3' %}
-{# ── 備考・メモ ── #}
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-  <h2 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-    <i class="fa-solid fa-note-sticky text-yellow-500"></i> 備考・メモ
-  </h2>
-  <textarea name="note" rows="6"
-            class="form-textarea block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500"
-            placeholder="自由記入（例: 稽古場バラシ後、そのまま劇場搬入・吊り込み）">{{ process.note }}</textarea>
+  <div class="mt-4">
+    <label class="block text-[10px] font-bold text-gray-500 mb-1">備考</label>
+    <textarea name="note" rows="3"
+              class="form-textarea block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500"
+              placeholder="備考があれば入力">{{ process.note|default:'' }}</textarea>
+  </div>
 </div>
 
 {% else %}
 {# ── 単日工程ブロック（仕込み / バラシ / 旅荷積み / 降ろし） ── #}
 {{ days_data|json_script:"days-data-json" }}
 {{ position_list|json_script:"position-list-json" }}
-<div class="space-y-4"
+<div class="{% if block_key == 'rehearsal_strike' %}flex flex-col gap-4{% else %}space-y-4{% endif %}"
      x-data="staffDaysApp()"
      x-init="init()">
 
   <input type="hidden" name="staff_days_json" :value="JSON.stringify(days)">
 
   <!-- 車両申請 -->
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5{% if block_key == 'rehearsal_strike' %} order-2{% endif %}">
     <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-      <i class="fa-solid fa-truck text-gray-300"></i> 荷積み・搬入
+      <i class="fa-solid fa-truck text-gray-300"></i> {% if block_key == 'rehearsal_strike' %}搬出・倉庫荷降ろし{% else %}荷積み・搬入{% endif %}
     </h3>
     <div class="space-y-3">
       <!-- ヘッダー行: 配車日 | 希望車種 -->
@@ -125,10 +126,10 @@
             <input type="text" name="route_from"
                    value="{{ existing_vehicle.route_from|default:'' }}"
                    class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2"
-                   placeholder="例: 赤堤倉庫">
+                   placeholder="{% if block_key == 'rehearsal_strike' %}例: すみだ4St{% else %}例: 赤堤倉庫{% endif %}">
           </div>
           <div>
-            <label class="block text-[10px] font-bold text-gray-500 mb-1">積み込み人数</label>
+            <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_strike' %}搬出人数{% else %}積み込み人数{% endif %}</label>
             <div class="flex items-center gap-1.5">
               <select name="loading_qty"
                       class="form-select w-20 rounded-xl border-gray-200 text-sm text-center focus:ring-indigo-500 py-2">
@@ -170,10 +171,10 @@
             <input type="text" name="route_to"
                    value="{{ existing_vehicle.route_to|default:'' }}"
                    class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2"
-                   placeholder="例: すみだ4St">
+                   placeholder="{% if block_key == 'rehearsal_strike' %}例: 赤堤倉庫{% else %}例: すみだ4St{% endif %}">
           </div>
           <div>
-            <label class="block text-[10px] font-bold text-gray-500 mb-1">搬入人数</label>
+            <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_strike' %}荷降ろし人数{% else %}搬入人数{% endif %}</label>
             <div class="flex items-center gap-1.5">
               <select name="unloading_qty"
                       class="form-select w-20 rounded-xl border-gray-200 text-sm text-center focus:ring-indigo-500 py-2">
@@ -201,7 +202,7 @@
   </div>
 
   <!-- 人員申請（多日対応） -->
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5{% if block_key == 'rehearsal_strike' %} order-1{% endif %}">
     <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
       <i class="fa-solid fa-users text-gray-300"></i> {{ process.title }}
     </h3>
@@ -236,7 +237,7 @@
             </div>
             <div>
               <label class="block text-[10px] font-bold text-gray-500 mb-1">
-                {% if block_key == 'rehearsal_setup' %}仕込み開始時間{% elif block_key == 'rehearsal_strike' or block_key == 'theatre_strike' %}集合時間{% else %}開始時間{% endif %}
+                {% if block_key == 'rehearsal_setup' %}仕込み開始時間{% elif block_key == 'theatre_strike' %}集合時間{% elif block_key == 'rehearsal_strike' %}スタンバイ時間{% else %}開始時間{% endif %}
               </label>
               <input type="time" x-model="day.standby_time"
                      @focus="if(!day.standby_time)day.standby_time='12:00'"
@@ -286,7 +287,7 @@
   </div>
 
   <!-- 備考 -->
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5{% if block_key == 'rehearsal_strike' %} order-3{% endif %}">
     <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
       <i class="fa-solid fa-comment text-gray-300"></i> 備考
     </h3>

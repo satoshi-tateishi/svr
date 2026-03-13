@@ -7,6 +7,7 @@ app_name = 'productions'
 urlpatterns = [
     path('', views.ProductionListView.as_view(), name='list'),
     path('create/', views.ProductionCreateView.as_view(), name='create'),
+    path('<int:pk>/edit/', views.ProductionEditView.as_view(), name='edit'),
     path('<int:pk>/', views.ProductionDetailView.as_view(), name='detail'),
     path(
         '<int:pk>/processes-partial/',
@@ -14,18 +15,8 @@ urlpatterns = [
         name='processes_partial',
     ),
     path(
-        '<int:pk>/vehicle-assignments/',
-        views.VehicleAssignmentListView.as_view(),
-        name='vehicle_assignment_list',
-    ),
-    path(
-        'vehicle-request/<int:pk>/assignment/',
-        views.VehicleAssignmentEditView.as_view(),
-        name='vehicle_assignment_edit',
-    ),
-    path(
         '<int:production_pk>/members/add/',
-        views.ProductionMemberBulkAddView.as_view(),
+        views.ProductionMemberEditView.as_view(),
         name='member_add',
     ),
     path(

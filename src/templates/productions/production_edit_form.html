@@ -1,0 +1,59 @@
+<div id="modal-container"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm"
+     onclick="if(event.target === this) this.remove()">
+
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh]" onclick="event.stopPropagation()">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-none">
+      <h3 class="font-bold text-gray-900 text-base">公演情報を編集</h3>
+      <button type="button"
+              onclick="document.getElementById('modal-container').remove()"
+              class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    {% if error_message %}
+      <div class="px-6 pt-4 flex-none">
+        <div class="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          {{ error_message }}
+        </div>
+      </div>
+    {% endif %}
+
+    <form hx-post="{% url 'productions:edit' production.pk %}"
+          hx-target="#modal"
+          hx-swap="innerHTML"
+          class="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+      {% csrf_token %}
+
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">公演タイトル <span class="text-red-500">*</span></label>
+        {{ form.title }}
+        {% if form.title.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.title.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">備考</label>
+        {{ form.note }}
+        {% if form.note.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.note.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div class="pt-2 flex gap-3">
+        <button type="button"
+                onclick="document.getElementById('modal-container').remove()"
+                class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+          キャンセル
+        </button>
+        <button type="submit"
+                class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-200">
+          保存
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

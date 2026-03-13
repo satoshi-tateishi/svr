@@ -7,6 +7,7 @@ from .models import (
     Position,
     ProcessDay,
     ProcessType,
+    Production,
     ProductionMember,
     StaffRequest,
     VehicleAssignment,
@@ -113,6 +114,27 @@ class VehicleAssignmentForm(forms.ModelForm):
             'order', 'name'
         )
         self.fields['assigned_vehicle'].empty_label = '--- 未設定 ---'
+
+
+class ProductionForm(forms.ModelForm):
+    class Meta:
+        model = Production
+        fields = ['title', 'note']
+        widgets = {
+            'title': forms.TextInput(
+                attrs={
+                    'class': _CSS_INPUT,
+                    'placeholder': '公演名を入力（例: ハムレット）',
+                }
+            ),
+            'note': forms.Textarea(
+                attrs={
+                    'rows': 4,
+                    'placeholder': '補足事項があれば入力',
+                    'class': _CSS_TEXTAREA,
+                }
+            ),
+        }
 
 
 class ProductionMemberForm(forms.ModelForm):

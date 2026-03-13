@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}車両手配管理 | svr{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-6 flex items-start gap-4">
+    <a href="{% url 'performances:dashboard' %}"
+       class="flex-none w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-100 text-gray-400 hover:text-indigo-600">
+      <i class="fa-solid fa-chevron-left"></i>
+    </a>
+    <div class="flex-1">
+      <h1 class="text-xl font-bold text-gray-900 leading-tight mb-1">車両手配管理</h1>
+      <p class="text-xs text-gray-500">Production の全公演を横断して管理します。</p>
+    </div>
+  </div>
+
+  {% if assignments %}
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-100 text-sm">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">公演</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">日付</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">工程</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">申請種別</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">申請車両</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">配車希望</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">到着希望</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">ルート</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">状態</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">手配車両</th>
+            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">メモ</th>
+            <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">操作</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for assignment in assignments %}
+            {% with vr=assignment.vehicle_request %}
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 whitespace-nowrap font-bold text-gray-700">
+                  {{ vr.process_day.process.production.title }}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap font-bold text-gray-700">
+                  {{ vr.process_day.date|date:"n/j" }}
+                  <span class="font-normal text-xs ml-1 {% if vr.process_day.date|date:'w' == '0' %}text-red-500{% elif vr.process_day.date|date:'w' == '6' %}text-blue-500{% else %}text-gray-400{% endif %}">({{ vr.process_day.date|date:"D"|slice:":1" }})</span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1 text-xs text-gray-700">
+                    {{ vr.process_day.process_type.name }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sky-50 text-sky-700">
+                    {{ vr.get_request_kind_display }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-gray-700">
+                  {{ vr.requested_vehicle.name }}
+                  <span class="text-gray-400 text-xs">({{ vr.requested_vehicle.get_vehicle_type_display }})</span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-gray-600 text-xs">
+                  {% if vr.requested_time %}{{ vr.requested_time|time:"H:i" }}{% else %}-{% endif %}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-gray-600 text-xs">
+                  {% if vr.arrival_requested_time %}{{ vr.arrival_requested_time|time:"H:i" }}{% else %}-{% endif %}
+                </td>
+                <td class="px-4 py-3 text-xs text-gray-600">
+                  {% if vr.route_from or vr.route_to %}
+                    <span>{{ vr.route_from|default:"-" }}</span>
+                    <span class="text-gray-400 mx-1">→</span>
+                    <span>{{ vr.route_to|default:"-" }}</span>
+                  {% else %}
+                    <span class="text-gray-300">-</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  {% if assignment.status == 'confirmed' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">確定</span>
+                  {% elif assignment.status == 'reviewing' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">調整中</span>
+                  {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-500">未対応</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-xs">
+                  {% if assignment.assigned_vehicle %}
+                    <span class="text-gray-800 font-medium">{{ assignment.assigned_vehicle.name }}</span>
+                    {% if assignment.assigned_vehicle != vr.requested_vehicle %}
+                      <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-amber-50 text-amber-600" title="申請車両と異なります">
+                        申請と異なる
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-400">未手配</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate">
+                  {{ assignment.note|default:"-" }}
+                </td>
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                  <button type="button"
+                          hx-get="{% url 'performances:production_vehicle_assignment_edit' vr.pk %}"
+                          hx-target="#modal"
+                          hx-swap="innerHTML"
+                          class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors">
+                    <i class="fa-solid fa-pen-to-square mr-1"></i> 編集
+                  </button>
+                </td>
+              </tr>
+            {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200 px-6">
+      <i class="fa-solid fa-truck text-4xl text-gray-200 mb-4 block"></i>
+      <p class="text-gray-500 font-bold">車両申請が登録されていません</p>
+      <p class="text-gray-400 text-sm mt-2">先に申請側から車両申請を追加してください。</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

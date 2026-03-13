@@ -1,18 +1,27 @@
 import logging
 
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
+
+from apps.productions.forms import VehicleAssignmentForm
+from apps.productions.models import VehicleAssignment, VehicleRequest
+from apps.productions.services.permissions import can_manage_assignments
 
 from .models import Performance
 from .services.dashboard_query_service import DashboardQueryService
 from .services.performance_service import PerformanceService
 from .services.phase_service import PhaseService
-from .services.report_service import ReportService
 
 logger = logging.getLogger(__name__)
+
+
+@login_required(login_url='accounts:login')
+def performance_root(request):
+    """旧 /performances/ 導線はダッシュボードへ集約"""
+    return redirect('performances:dashboard')
 
 
 @login_required(login_url='accounts:login')
@@ -29,6 +38,72 @@ def dashboard(request):
             'schedule_drifts': schedule_drifts,
             'unlocked_past_slots': unlocked_past_slots,
         },
+    )
+
+
+@login_required(login_url='accounts:login')
+def production_vehicle_assignment_dashboard(request):
+    """Production 横断の車両手配管理一覧"""
+    if not can_manage_assignments(request.user):
+        return HttpResponseForbidden('手配管理の権限がありません。')
+
+    vehicle_requests = VehicleRequest.objects.select_related(
+        'process_day__process__production',
+        'process_day__process_type',
+        'requested_vehicle',
+    )
+    for vr in vehicle_requests:
+        VehicleAssignment.objects.get_or_create(vehicle_request=vr)
+
+    assignments = VehicleAssignment.objects.select_related(
+        'vehicle_request__process_day__process__production',
+        'vehicle_request__process_day__process_type',
+        'vehicle_request__requested_vehicle',
+        'assigned_vehicle',
+    ).order_by(
+        'vehicle_request__process_day__process__production__title',
+        'vehicle_request__process_day__date',
+        'vehicle_request__requested_time',
+    )
+    return render(
+        request,
+        'performances/production_vehicle_assignment_dashboard.html',
+        {'assignments': assignments},
+    )
+
+
+@login_required(login_url='accounts:login')
+def production_vehicle_assignment_edit(request, pk):
+    """Production 横断の車両手配編集モーダル"""
+    if not can_manage_assignments(request.user):
+        return HttpResponseForbidden('手配管理の権限がありません。')
+
+    vr = get_object_or_404(VehicleRequest, pk=pk)
+    assignment, _ = VehicleAssignment.objects.get_or_create(vehicle_request=vr)
+
+    if request.method == 'POST':
+        form = VehicleAssignmentForm(request.POST, instance=assignment)
+        if form.is_valid():
+            form.save()
+            response = HttpResponse()
+            response['HX-Redirect'] = reverse('performances:production_vehicle_assignments')
+            return response
+        return render(
+            request,
+            'performances/production_vehicle_assignment_form.html',
+            {
+                'vr': vr,
+                'assignment': assignment,
+                'form': form,
+                'error_message': 'エラーが発生しました。入力内容を確認してください。',
+            },
+        )
+
+    form = VehicleAssignmentForm(instance=assignment)
+    return render(
+        request,
+        'performances/production_vehicle_assignment_form.html',
+        {'vr': vr, 'assignment': assignment, 'form': form},
     )
 
 
@@ -477,36 +552,4 @@ def performance_delete(request, pk):
     performance.delete()
 
     logger.info(f'公演削除完了: title={title}, performance_id={pk}, user={request.user.email}')
-    return redirect('performances:list')
-
-
-@login_required(login_url='accounts:login')
-def performance_report_pdf(request, pk):
-    """公演手配書 PDF ダウンロード（現場スタッフ・ドライバー配布用）"""
-    performance = get_object_or_404(Performance, pk=pk)
-
-    try:
-        pdf_bytes = ReportService.generate_performance_report(performance)
-    except ValidationError as e:
-        return HttpResponseBadRequest(str(e))
-
-    filename = f'performance_report_{performance.pk}.pdf'
-    response = HttpResponse(pdf_bytes, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return response
-
-
-@login_required(login_url='accounts:login')
-def financial_report_pdf(request, pk):
-    """手配実績証明書 PDF ダウンロード（経理提出・PDF 保存用）"""
-    performance = get_object_or_404(Performance, pk=pk)
-
-    try:
-        pdf_bytes = ReportService.generate_financial_report(performance)
-    except ValidationError as e:
-        return HttpResponseBadRequest(str(e))
-
-    filename = f'financial_report_{performance.pk}.pdf'
-    response = HttpResponse(pdf_bytes, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return response
+    return redirect('performances:dashboard')

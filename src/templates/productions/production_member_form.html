@@ -33,21 +33,21 @@
           class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
       {% csrf_token %}
 
+      <!-- 役割 -->
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">ポジション <span class="text-red-500">*</span></label>
+        {{ form.role }}
+        {% if form.role.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ form.role.errors.0 }}</p>
+        {% endif %}
+      </div>
+
       <!-- 担当者 -->
       <div>
         <label class="block text-xs font-bold text-gray-600 mb-1">担当者 <span class="text-red-500">*</span></label>
         {{ form.user }}
         {% if form.user.errors %}
           <p class="text-xs text-red-600 mt-1">{{ form.user.errors.0 }}</p>
-        {% endif %}
-      </div>
-
-      <!-- 役割 -->
-      <div>
-        <label class="block text-xs font-bold text-gray-600 mb-1">役割 <span class="text-red-500">*</span></label>
-        {{ form.role }}
-        {% if form.role.errors %}
-          <p class="text-xs text-red-600 mt-1">{{ form.role.errors.0 }}</p>
         {% endif %}
       </div>
 

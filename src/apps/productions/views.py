@@ -13,7 +13,13 @@ from django.views.generic import CreateView, DetailView, ListView, View
 
 from apps.performances.models.vehicle import Vehicle
 
-from .forms import ProcessDayForm, ProductionMemberForm, StaffRequestForm, VehicleAssignmentForm
+from .forms import (
+    ProcessDayForm,
+    ProductionForm,
+    ProductionMemberForm,
+    StaffRequestForm,
+    VehicleAssignmentForm,
+)
 from .mixins import (
     AssignmentManagePermissionMixin,
     ProcessEditPermissionMixin,
@@ -619,10 +625,10 @@ class ProductionListView(LoginRequiredMixin, ListView):
 
 
 class ProductionCreateView(LoginRequiredMixin, CreateView):
-    """公演の新規作成（タイトル・担当者のみ。全ブロックを自動生成して detail へ遷移）"""
+    """公演の新規作成（タイトル・備考・担当者のみ。全ブロックを自動生成して detail へ遷移）"""
 
     model = Production
-    fields = ['title']
+    fields = ['title', 'note']
     template_name = 'productions/production_form.html'
 
     def get_context_data(self, **kwargs):
@@ -694,6 +700,37 @@ class ProductionCreateView(LoginRequiredMixin, CreateView):
 
     def get_success_url(self):
         return reverse('productions:detail', kwargs={'pk': self.object.pk})
+
+
+class ProductionEditView(LoginRequiredMixin, View):
+    """公演情報の編集（モーダル用）"""
+
+    def get(self, request, pk):
+        production = get_object_or_404(Production, pk=pk)
+        form = ProductionForm(instance=production)
+        return render(
+            request,
+            'productions/production_edit_form.html',
+            {'production': production, 'form': form},
+        )
+
+    def post(self, request, pk):
+        production = get_object_or_404(Production, pk=pk)
+        form = ProductionForm(request.POST, instance=production)
+        if form.is_valid():
+            form.save()
+            response = HttpResponse()
+            response['HX-Redirect'] = reverse('productions:list')
+            return response
+        return render(
+            request,
+            'productions/production_edit_form.html',
+            {
+                'production': production,
+                'form': form,
+                'error_message': 'エラーが発生しました。入力内容を確認してください。',
+            },
+        )
 
 
 class ProductionDetailView(LoginRequiredMixin, DetailView):

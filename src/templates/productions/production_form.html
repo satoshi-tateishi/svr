@@ -63,6 +63,17 @@
       </div>
     </div>
 
+    <div>
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">備考</label>
+      <textarea name="note"
+                rows="4"
+                class="form-textarea block w-full rounded-lg border-gray-200 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="補足事項があれば入力">{{ form.note.value|default:'' }}</textarea>
+      {% if form.note.errors %}
+        <p class="mt-1 text-xs text-red-600">{{ form.note.errors.0 }}</p>
+      {% endif %}
+    </div>
+
     <div class="pt-4">
       <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">
         公演を作成する

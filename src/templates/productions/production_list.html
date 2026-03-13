@@ -19,9 +19,8 @@
         </div>
 
         <div class="space-y-2">
-          <div class="flex items-center text-sm text-gray-600">
-            <i class="fa-regular fa-calendar-range w-5"></i>
-            <span>
+          <div class="text-sm text-gray-600 pl-0">
+            <span class="inline-flex items-center">
               {% if prod.actual_start_date %}
                 {{ prod.actual_start_date|date:"Y/m/d" }} 〜 {% if prod.actual_start_date.year != prod.actual_end_date.year %}{{ prod.actual_end_date|date:"Y/m/d" }}{% else %}{{ prod.actual_end_date|date:"m/d" }}{% endif %}
               {% else %}
@@ -29,32 +28,35 @@
               {% endif %}
             </span>
           </div>
-          {% with prod.sound_designer_list|first as sd %}
-            <div class="flex items-center text-sm text-gray-600">
-              <i class="fa-solid fa-music w-5 text-xs"></i>
-              <span>デザイナー:
-                {% if sd %}
-                  {% if sd.user.profile %}{{ sd.user.profile.full_name }}{% else %}{{ sd.user.username }}{% endif %}
+          <div class="overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+            <div class="grid grid-cols-[6.75rem_minmax(0,1fr)] text-sm">
+              <div class="border-b border-gray-100 px-3 py-2 font-bold text-gray-500 whitespace-nowrap">デザイナー</div>
+              <div class="border-b border-gray-100 px-3 py-2 text-gray-700">
+                {% if prod.sound_designer_list %}
+                  <div class="space-y-1">
+                    {% for sd in prod.sound_designer_list %}
+                      <div>{% if sd.user.profile %}{{ sd.user.profile.full_name }}{% else %}{{ sd.user.username }}{% endif %}</div>
+                    {% endfor %}
+                  </div>
                 {% else %}
                   <span class="text-gray-400">未登録</span>
                 {% endif %}
-              </span>
-            </div>
-          {% endwith %}
-          {% with prod.chief_list|first as chief %}
-            <div class="flex items-center text-sm text-gray-600">
-              <i class="fa-solid fa-user-tie w-5 text-xs"></i>
-              <span>チーフ:
-                {% if chief %}
-                  {% if chief.user.profile %}{{ chief.user.profile.full_name }}{% else %}{{ chief.user.username }}{% endif %}
+              </div>
+              <div class="px-3 py-2 font-bold text-gray-500 whitespace-nowrap">チーフ</div>
+              <div class="px-3 py-2 text-gray-700">
+                {% if prod.chief_list %}
+                  <div class="space-y-1">
+                    {% for chief in prod.chief_list %}
+                      <div>{% if chief.user.profile %}{{ chief.user.profile.full_name }}{% else %}{{ chief.user.username }}{% endif %}</div>
+                    {% endfor %}
+                  </div>
                 {% else %}
                   <span class="text-gray-400">未登録</span>
                 {% endif %}
-              </span>
+              </div>
             </div>
-          {% endwith %}
-          <div class="flex items-center text-sm text-gray-600">
-            <i class="fa-regular fa-user-pen w-5"></i>
+          </div>
+          <div class="text-sm text-gray-600">
             <span>作成者: {{ prod.created_by.profile.full_name|default:prod.created_by.username }}</span>
           </div>
         </div>
@@ -64,12 +66,6 @@
             {{ prod.note }}
           </p>
         {% endif %}
-
-        <div class="mt-4 flex justify-end">
-          <span class="text-indigo-600 text-sm font-medium flex items-center gap-1">
-            詳細を表示 <i class="fa-solid fa-chevron-right text-xs"></i>
-          </span>
-        </div>
       </a>
     {% empty %}
       <div class="text-center py-12 bg-white rounded-xl border-2 border-dashed border-gray-200">
@@ -113,25 +109,29 @@
               </td>
 
               {# デザイナー #}
-              <td class="px-4 py-3 whitespace-nowrap text-gray-600">
-                {% with prod.sound_designer_list|first as sd %}
-                  {% if sd %}
-                    {% if sd.user.profile %}{{ sd.user.profile.full_name }}{% else %}{{ sd.user.username }}{% endif %}
-                  {% else %}
-                    <span class="text-gray-400 italic text-xs">未登録</span>
-                  {% endif %}
-                {% endwith %}
+              <td class="px-4 py-3 text-gray-600">
+                {% if prod.sound_designer_list %}
+                  <div class="space-y-1 whitespace-nowrap">
+                    {% for sd in prod.sound_designer_list %}
+                      <div>{% if sd.user.profile %}{{ sd.user.profile.full_name }}{% else %}{{ sd.user.username }}{% endif %}</div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <span class="text-gray-400 italic text-xs">未登録</span>
+                {% endif %}
               </td>
 
               {# チーフ #}
-              <td class="px-4 py-3 whitespace-nowrap text-gray-600">
-                {% with prod.chief_list|first as chief %}
-                  {% if chief %}
-                    {% if chief.user.profile %}{{ chief.user.profile.full_name }}{% else %}{{ chief.user.username }}{% endif %}
-                  {% else %}
-                    <span class="text-gray-400 italic text-xs">未登録</span>
-                  {% endif %}
-                {% endwith %}
+              <td class="px-4 py-3 text-gray-600">
+                {% if prod.chief_list %}
+                  <div class="space-y-1 whitespace-nowrap">
+                    {% for chief in prod.chief_list %}
+                      <div>{% if chief.user.profile %}{{ chief.user.profile.full_name }}{% else %}{{ chief.user.username }}{% endif %}</div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <span class="text-gray-400 italic text-xs">未登録</span>
+                {% endif %}
               </td>
 
               {# 作成者 #}
@@ -150,10 +150,19 @@
 
               {# 操作 #}
               <td class="px-4 py-3 text-center">
-                <a href="{% url 'productions:detail' prod.pk %}"
-                   class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors whitespace-nowrap">
-                  <i class="fa-solid fa-chevron-right text-[10px]"></i> 詳細
-                </a>
+                <div class="inline-flex items-center gap-2">
+                  <button type="button"
+                          hx-get="{% url 'productions:edit' prod.pk %}"
+                          hx-target="#modal"
+                          hx-swap="innerHTML"
+                          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors whitespace-nowrap">
+                    <i class="fa-solid fa-pen-to-square text-[10px]"></i> 編集
+                  </button>
+                  <a href="{% url 'productions:detail' prod.pk %}"
+                     class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors whitespace-nowrap">
+                    <i class="fa-solid fa-chevron-right text-[10px]"></i> 詳細
+                  </a>
+                </div>
               </td>
 
             </tr>

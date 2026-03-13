@@ -1,5 +1,5 @@
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-  <div class="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-100">
+<div class="bg-white rounded-2xl border border-gray-500 shadow-sm overflow-hidden">
+  <div class="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-400">
     <div class="w-7 h-7 rounded-full bg-indigo-50 border-2 border-indigo-200 text-indigo-600 flex items-center justify-center text-xs font-black flex-none">
       {{ forloop.counter }}
     </div>
@@ -57,37 +57,39 @@
       {% with dow=unit.work_date|date:"w" %}
       <div class="bg-gray-50 rounded-2xl overflow-hidden border border-gray-100">
         <div class="flex flex-col sm:flex-row">
-          <div class="flex-none sm:w-28 border-b sm:border-b-0 sm:border-r px-3 py-4 flex flex-row sm:flex-col items-center sm:items-center justify-between sm:justify-center gap-3 {% if unit.unit_type == 'transport' %}bg-sky-50 border-sky-100{% else %}bg-indigo-50 border-indigo-100{% endif %}">
+          <div class="flex-none sm:w-28 border-b sm:border-b-0 sm:border-r px-3 py-4 flex flex-row sm:flex-col items-center sm:items-center justify-between sm:justify-center gap-3 {% if unit.unit_type == 'transport' %}bg-amber-50 border-amber-100{% else %}bg-indigo-50 border-indigo-100{% endif %}">
             <div class="text-center min-w-[3.5rem]">
-              <div class="text-xl font-black leading-tight text-gray-900">
-                {% if unit.work_date %}{{ unit.work_date|date:"n/j" }}{% else %}<span class="text-sm text-gray-400">未定</span>{% endif %}
+              <div class="flex items-center justify-center gap-2 sm:block">
+                <div class="text-xl font-black leading-tight text-gray-900">
+                  {% if unit.work_date %}{{ unit.work_date|date:"n/j" }}{% else %}<span class="text-sm text-gray-400">未定</span>{% endif %}
+                </div>
               </div>
               {% if unit.work_date %}
               <div class="text-[10px] font-bold leading-none mt-1 {% if dow == '0' %}text-red-400{% elif dow == '6' %}text-sky-400{% else %}text-gray-400{% endif %}">
                 {{ unit.work_date|date:"D" }}
               </div>
               {% endif %}
-            </div>
-
-            <div class="text-center space-y-0.5 min-w-[4.5rem]">
-              {% if unit.unit_type == 'staffing' and unit.start_time %}
-              <div class="text-[10px] font-bold text-gray-500">開始 {{ unit.start_time|time:"H:i" }}</div>
-              {% endif %}
-              {% if unit.unit_type == 'staffing' and unit.end_time %}
-              <div class="text-[10px] font-bold text-gray-500">終了 {{ unit.end_time|time:"H:i" }}</div>
+              {% if unit.setup_label_display and unit.unit_type == 'staffing' %}
+              <div class="hidden sm:flex mt-2 justify-center">
+                <span class="rounded-full px-2.5 py-1 text-[10px] font-black {% if unit.setup_label == 'setup_staff' %}bg-amber-100 text-amber-700 ring-1 ring-amber-200{% elif unit.setup_label == 'stage_rehearsal' %}bg-sky-100 text-sky-700 ring-1 ring-sky-200{% elif unit.setup_label == 'opening_night' %}bg-rose-100 text-rose-700 ring-1 ring-rose-200{% else %}bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100{% endif %}">{{ unit.setup_label_display }}</span>
+              </div>
               {% endif %}
             </div>
-
-            <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-bold {% if unit.unit_type == 'transport' %}text-sky-700{% else %}text-indigo-600{% endif %}">
-              {% if unit.unit_type == 'transport' %}車両便申請{% else %}人員申請{% endif %}
-            </span>
+            <div class="flex items-center gap-1.5">
+              {% if unit.setup_label_display and unit.unit_type == 'staffing' %}
+              <span class="sm:hidden rounded-full px-2 py-1 text-[10px] font-black {% if unit.setup_label == 'setup_staff' %}bg-amber-100 text-amber-700 ring-1 ring-amber-200{% elif unit.setup_label == 'stage_rehearsal' %}bg-sky-100 text-sky-700 ring-1 ring-sky-200{% elif unit.setup_label == 'opening_night' %}bg-rose-100 text-rose-700 ring-1 ring-rose-200{% else %}bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100{% endif %}">{{ unit.setup_label_display }}</span>
+              {% endif %}
+              <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-bold {% if unit.unit_type == 'transport' %}text-amber-700{% else %}text-indigo-600{% endif %}">
+                {% if unit.unit_type == 'transport' %}車両{% else %}人員{% endif %}
+              </span>
+            </div>
           </div>
 
           <div class="flex-1 p-4 space-y-3">
             {% if unit.unit_type == 'transport' and unit.vehicle_request %}
             <div>
               <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                <i class="fa-solid fa-truck text-gray-300"></i> 車両申請: {% if pb.block_key == 'rehearsal_strike' or pb.block_key == 'theatre_strike' %}搬出・荷降ろし{% elif pb.block_key == 'travel_load' %}倉庫荷出し・旅荷積み{% elif pb.block_key == 'travel_unload' %}旅荷降ろし・倉庫荷降ろし{% else %}倉庫荷出し・搬入{% endif %}
+                <i class="fa-solid fa-truck text-gray-300"></i> {% if pb.block_key == 'rehearsal_strike' or pb.block_key == 'theatre_strike' %}搬出・荷降ろし{% elif pb.block_key == 'travel_load' %}倉庫荷出し・旅荷積み{% elif pb.block_key == 'travel_unload' %}旅荷降ろし・倉庫荷降ろし{% else %}倉庫荷出し・搬入{% endif %}
               </div>
               <div class="bg-white/80 rounded-xl p-3 space-y-2 text-xs text-gray-700">
                 <div>
@@ -155,16 +157,29 @@
                 <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
                   <i class="fa-solid fa-users text-gray-300"></i> 人員申請
                 </div>
-                {% if unit.setup_label_display %}
-                <span class="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-bold text-indigo-600">{{ unit.setup_label_display }}</span>
+              </div>
+              {% if unit.start_time or unit.end_time %}
+              <div class="mb-2 flex gap-2 items-start">
+                {% if unit.start_time %}
+                <div class="bg-gray-50 rounded-lg p-2.5 min-w-[5.5rem]">
+                  <div class="text-[10px] text-gray-400">開始</div>
+                  <div class="text-sm font-black text-gray-900">{{ unit.start_time|time:"H:i" }}</div>
+                </div>
+                {% endif %}
+                {% if unit.end_time %}
+                <div class="bg-gray-50 rounded-lg p-2.5 min-w-[5.5rem]">
+                  <div class="text-[10px] text-gray-400">終了</div>
+                  <div class="text-sm font-black text-gray-900">{{ unit.end_time|time:"H:i" }}</div>
+                </div>
                 {% endif %}
               </div>
+              {% endif %}
               <div class="bg-white/80 rounded-xl p-3 space-y-1.5 text-xs text-gray-700">
                 {% if unit.staff_rows %}
                   {% for row in unit.staff_rows %}
                   <div class="flex items-center gap-2 py-0.5">
                     <span class="text-gray-400 w-16 flex-none">{{ row.label }}</span>
-                    <span class="font-bold">{{ row.qty }}人</span>
+                    <span class="text-base font-black text-gray-900">{{ row.qty }}人</span>
                     {% if row.include_self %}<span class="text-indigo-500 text-[10px]">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px]">×本人含まず</span>{% endif %}
                   </div>
                   {% endfor %}

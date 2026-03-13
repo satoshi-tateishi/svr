@@ -146,7 +146,7 @@ class Position(models.Model):
 # =========================
 
 PROCESS_SETUP_LABEL_CHOICES = [
-    ('setup_staff', '仕込み人数'),
+    ('setup_staff', '仕込み'),
     ('stage_rehearsal', '舞台稽古'),
     ('opening_night', '初日'),
 ]

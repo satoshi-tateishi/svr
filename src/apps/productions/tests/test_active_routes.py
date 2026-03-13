@@ -10,7 +10,6 @@ from apps.productions.models import (
     ProcessType,
     Production,
     ProductionMember,
-    VehicleAssignment,
     VehicleRequest,
 )
 
@@ -74,6 +73,34 @@ class TestProductionActiveRoutes:
         assert create_response.status_code == 200
         assert detail_response.status_code == 200
         assert reverse('productions:create') in list_response.content.decode()
+        assert 'name="note"' in create_response.content.decode()
+        assert (
+            reverse('productions:edit', kwargs={'pk': self.production.pk})
+            in list_response.content.decode()
+        )
+        assert '車両管理' not in detail_response.content.decode()
+
+    def test_list_page_keeps_production_edit_modal(self, client):
+        client.force_login(self.user)
+
+        edit_response = client.get(
+            reverse('productions:edit', kwargs={'pk': self.production.pk}),
+            HTTP_HX_REQUEST='true',
+        )
+        save_response = client.post(
+            reverse('productions:edit', kwargs={'pk': self.production.pk}),
+            {'title': '更新後タイトル', 'note': '更新後備考'},
+            HTTP_HX_REQUEST='true',
+        )
+
+        assert edit_response.status_code == 200
+        assert '公演情報を編集' in edit_response.content.decode()
+        assert save_response.status_code == 200
+        assert save_response['HX-Redirect'] == reverse('productions:list')
+
+        self.production.refresh_from_db()
+        assert self.production.title == '更新後タイトル'
+        assert self.production.note == '更新後備考'
 
     def test_detail_page_keeps_member_and_block_modals(self, client):
         client.force_login(self.user)
@@ -95,17 +122,28 @@ class TestProductionActiveRoutes:
         assert edit_response.status_code == 200
         assert block_response.status_code == 200
 
-    def test_vehicle_assignment_page_and_modal_are_available(self, client):
+    def test_dashboard_vehicle_assignment_page_and_modal_are_available(self, client):
         client.force_login(self.user)
 
-        list_response = client.get(
-            reverse('productions:vehicle_assignment_list', kwargs={'pk': self.production.pk})
-        )
+        list_response = client.get(reverse('performances:production_vehicle_assignments'))
         edit_response = client.get(
-            reverse('productions:vehicle_assignment_edit', kwargs={'pk': self.vehicle_request.pk}),
+            reverse(
+                'performances:production_vehicle_assignment_edit',
+                kwargs={'pk': self.vehicle_request.pk},
+            ),
             HTTP_HX_REQUEST='true',
         )
 
         assert list_response.status_code == 200
         assert edit_response.status_code == 200
-        assert VehicleAssignment.objects.filter(vehicle_request=self.vehicle_request).exists()
+        assert self.production.title in list_response.content.decode()
+
+    def test_dashboard_has_vehicle_management_entry(self, client):
+        client.force_login(self.user)
+
+        response = client.get(reverse('performances:dashboard'))
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert '車両管理へ' in content
+        assert reverse('performances:production_vehicle_assignments') in content

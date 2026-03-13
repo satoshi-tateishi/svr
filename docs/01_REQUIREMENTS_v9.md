@@ -1,280 +1,166 @@
-# REQUIREMENTS_v9.md（AI実装用ミニマム仕様）
+# REQUIREMENTS_v9.md
+
+## 現行実装に合わせた最小要件
+
+本書は、2026-03-13 時点のコードベースに合わせて「実装済み」「未実装」を明確にした要件整理です。
 
 ## 1. システム目的
 
-本システムの目的は以下の3点。
+最優先:
+
+- 人員申請・車両申請・工程管理の入力負荷を下げる
+- 手配ミスの温床になる情報分散を減らす
 
-### 最優先
+次点:
 
-**人員配置・配車・工程管理の管理負荷を削減する**
+- ダブルブッキング防止
+- Lock 済み実績の固定
+- PDF 帳票の即時出力
 
-### 次点
+将来課題:
 
--   ダブルブッキング防止
--   情報共有の可視化
+- SaaS 連携
+- 監査ログ基盤
+- 横断分析の高度化
 
-### 優先度低
+## 2. システム責務
 
--   経営分析
+### productions が担うもの
 
-* * *
+- 公演 (`Production`) の管理
+- 工程ブロック / 工程日 / 申請単位の管理
+- 人員申請・車両申請の入力
+- 車両手配状態の管理
 
-# 2. システム責務
+### performances が担うもの
 
-自作アプリは **確定実績管理まで** を責務とする。
+- 実績公演 (`Performance`) の管理
+- 標準工程展開
+- 人員 / 車輌の割当
+- 単価・原価スナップショット
+- Lock
+- PDF 帳票出力
+- 乖離ダッシュボード
 
-金額の最終確定責任は SaaS 側。
+## 3. 絶対遵守ルール
 
-ただし以下は自作アプリが責任を持つ。
+1. Lock 後は解除しない
+2. `applied_*` は Lock 時点のスナップショットとして扱う
+3. 単価履歴は上書きではなく期間追加で管理する
+4. ビジネスロジックはサービス層へ置く
+5. 権限判定は `productions/services/permissions.py` に集約する
+6. HTMX 画面は成功時に `HX-Redirect` を返す
+7. インライン CSS は使わず Tailwind CSS のみ使う
 
-### Lock時確定情報
+## 4. 現行データ構造
 
--   人員原価
--   車両原価
--   手当合計
--   運行数
+### 申請側
 
-* * *
+```text
+Production
+└─ Process
+   ├─ ProcessDay
+   │  ├─ StaffRequest
+   │  └─ VehicleRequest
+   └─ ProcessRequestUnit
+      ├─ StaffRequest
+      └─ VehicleRequest
+```
 
-# 3. 設計の基本原則（絶対遵守）
+### 実績側
 
-1.  Request（希望） / Assignment（割当）分離
-2.  Lock後は変更不可
-3.  金額履歴は上書き禁止
-4.  占有時間はバッファ込み
-5.  物理削除禁止
-6.  SaaSの計算ロジックを再実装しない
-7.  スナップショット保存必須
-8.  過去データを書き換えない
+```text
+Performance
+├─ Phase
+│  └─ PhaseSlot
+│     └─ StaffAssignment
+├─ PerformanceFreelanceRate
+└─ VehicleOperation
+   └─ VehicleAssignment
+```
 
-* * *
+## 5. 人員管理要件
 
-# 4. システム構造
+### 申請
 
-Production  
- └ Process  
-    └ ProcessDay  
-        ├ StaffRequest  
-        └ VehicleRequest
+- `StaffRequest` は `ProcessDay` または `ProcessRequestUnit` に紐づく
+- 数量は `quantity`
+- `include_self` を保持する
+- 時間帯は任意入力で、未入力時は工程時間を暗黙利用する運用
 
-### Request層
+### 実績
 
-制作が入力する希望。
+- `StaffAssignment` は `PhaseSlot` に紐づく
+- 占有時間 `occupied_start` / `occupied_end` を持つ
+- Lock 時に以下を保存する
+  - `applied_unit_price`
+  - `applied_allowance_total`
+  - `applied_total_amount`
+  - `applied_position_name`
+  - `locked_at`
 
-### Assignment層
+## 6. 車両管理要件
 
-管理者が確定する実績。
+### 申請
 
-* * *
+- `VehicleRequest` は `ProcessDay` または `ProcessRequestUnit` に紐づく
+- `requested_vehicle`, `request_kind`, `date`, `requested_time`, `arrival_requested_time` を持つ
+- ルートは `route_from`, `route_to`
+- 荷役人数は `loading_qty`, `unloading_qty` と `*_include_self`
 
-# 5. 人員管理
+### 管理手配
 
-## StaffRequest
+- `productions.VehicleAssignment` は `VehicleRequest` と 1:1
+- `assigned_vehicle`, `status`, `note` を持つ
+- ステータスは `pending`, `reviewing`, `confirmed`
 
-制作側の希望。
+### 実績
 
-### 主な内容
+- `performances.VehicleOperation` は requested/scheduled を分離する
+- `performances.VehicleAssignment` は Lock 時に `applied_cost_amount` を固定する
 
--   position
--   required_count
--   note
+## 7. ダブルブッキング要件
 
-### UI
+### 人員
 
--   ProcessDay単位一括編集
--   前日コピー
+- `AssignmentService.confirm_staff_assignment()` が重複時間帯を拒否する
+- 判定は半開区間
 
-* * *
+### 車輌
 
-## StaffAssignment
+- `AssignmentService.confirm_vehicle_assignment()` が `scheduled_start/end` ベースで重複を拒否する
+- 外注車輌は重複チェック対象外
 
-管理側の確定割当。
+## 8. Lock 要件
 
-Lock時に以下を保存。
+### `LockService.lock_phase_slot()`
 
-applied_unit_price  
-applied_allowance_total  
-applied_total_amount  
-applied_position_name  
-locked_at
+- `PhaseSlot` を `LOCKED` にする
+- 各 `StaffAssignment` に単価スナップショットを保存する
+- 単価未登録やポジション未設定は 0 円で確定する
 
-* * *
+### `LockService.lock_vehicle_operation()`
 
-# 6. 車両申請（VehicleRequest）
+- `VehicleOperation` を `LOCKED` にする
+- 各 `VehicleAssignment` の `applied_cost_amount` を確定する
+- 外注車輌で原価 0 円なら `ZeroCostWarning` を送出する
 
-### 概念
+## 9. 帳票要件
 
-**1レコード = 1便の申請**
+- `ReportService.generate_performance_report()` は金額非表示の公演手配書を出力する
+- `ReportService.generate_financial_report()` は金額表示の手配実績証明書を出力する
+- いずれも Lock 済みデータのみ対象とする
 
-申請は実運行ではなく **配車希望の断片情報**。
+## 10. 非機能要件
 
-### 主フィールド
+- Django / Docker Compose / MySQL 8.4 / Redis
+- 日本語 UI 前提
+- Ruff チェックとフォーマット必須
+- テストは Docker コンテナ内で実行する
 
-requested_vehicle  
-request_kind  
-requested_time  
-route_from  
-route_to  
-note
+## 11. 未実装項目
 
-### request_kind
-
-例
-
--   荷積み
--   搬入
--   引き取り
--   荷降ろし
--   その他
-
-### route
-
-route_from  
-route_to
-
-例
-
-倉庫 → 稽古場  
-稽古場 → 劇場  
-劇場 → 倉庫
-
-* * *
-
-# 7. 車両申請UI
-
-### 基本構造
-
-1行 = 1便
-
-入力項目
-
-申請車両  
-申請種別  
-出発地  
-目的地  
-配車希望時間  
-備考
-
-### UI機能
-
--   行追加
--   行複製
--   削除
--   **直近コピー**
-
-* * *
-
-# 8. 直近コピー
-
-コピー対象
-
-同一Production  
-現在日より過去  
-VehicleRequestが存在  
-最も近いProcessDay
-
-* * *
-
-# 9. 配車管理（管理側）
-
-申請は **実運行ではない**。
-
-管理側は申請を元に **運行を再構成**する。
-
-例
-
-倉庫 → 稽古場A  
-稽古場A → 稽古場B  
-稽古場B → 劇場  
-劇場 → 倉庫
-
-### 管理側操作
-
--   申請の統合
--   分割
--   並び替え
--   車両割当
-
-* * *
-
-# 10. VehicleAssignment
-
-Lock時に以下を保存。
-
-applied_cost_amount  
-applied_sales_amount  
-actual_operation_count  
-locked_at
-
-* * *
-
-# 11. ワークフロー
-
-1 マスタ登録  
-2 Request入力  
-3 Assignment確定  
-4 原価入力  
-5 Lock  
-6 SaaS連携
-
-* * *
-
-# 12. Lock処理
-
-Lockは **トランザクション必須**
-
-atomic  
-select_for_update
-
-Lock時に
-
--   人員金額
--   車両原価
--   工程数
-
-をスナップショット保存。
-
-* * *
-
-# 13. 非機能要件
-
-Ubuntu 24.04  
-Django  
-Docker  
-MySQL  
-LINE WORKS SSO  
-AuditLog
-
-* * *
-
-# 14. やらないこと
-
--   単価履歴上書き
--   Lock後変更
--   SaaS税計算の再実装
--   GPS追跡
-
-* * *
-
-# 15. 最終設計思想
-
-申請 = 希望  
-割当 = 実績  
-Lock = 確定
-
-そして
-
-**申請は断片、運行は管理側で構築する**
-
-* * *
-
-## AI実装時の最重要ルール
-
-必ず守ること。
-
-Lockはatomic  
-select_for_update  
-履歴上書き禁止  
-スナップショット保存  
-再計算禁止  
-過去変更禁止
+- AuditLog
+- SaaS 連携
+- `productions` と `performances` の自動データ連携
+- Lock 理由入力フロー

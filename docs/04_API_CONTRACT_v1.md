@@ -1,719 +1,200 @@
-## 公演手配管理システム
+# API / View Contract 仕様
 
-## API / View Contract 仕様（HTMX + Django View ベース）
+## 1. 基本方針
 
-* * *
+### `productions`
 
-# 1. 目的
+- 一覧・詳細は通常テンプレート
+- 編集 UI は HTMX モーダル中心
+- 成功時は `HX-Redirect`
+- エラー時は同テンプレートを再描画
 
-本ドキュメントは、フロントエンド（HTMX / Alpine.js）と Django View 間の契約を固定し、以下を防ぐことを目的とする。
+### `performances`
 
--   画面差し替え時の不整合
--   JSON構造の揺れ
--   bulk edit の保存形式のブレ
--   直近コピー API の返却仕様のブレ
--   HTMXモーダルのターゲット・swap方法の不一致
+- 通常の Django View 中心
+- PDF 出力はバイナリレスポンス
 
-* * *
+## 2. 共通レスポンスルール
 
-# 2. 基本方針
+### HTMX 成功
 
-## 2.1 UI構成
-
-本システムの申請UIは以下の構成を基本とする。
-
--   一覧画面: 通常 Django Template
--   編集UI: **HTMX モーダル**
--   モーダル内部状態管理: **Alpine.js**
--   保存: **HTMX POST**
--   保存成功後: **HX-Redirect**
--   バリデーションエラー時: **モーダルHTMLを再描画**
-
-* * *
-
-## 2.2 API種別
-
-本システムでは API を次の2種類に分ける。
-
-### A. HTML返却型
-
-HTMXモーダル表示用。
-
-例:
-
--   ProcessDay編集
--   StaffRequest一括編集
--   VehicleRequest一括編集
-
-### B. JSON返却型
-
-補助機能用。
-
-例:
-
--   前日コピー
--   直近コピー
-
-* * *
-
-# 3. 共通ルール
-
-## 3.1 HTMX モーダル
-
-モーダルを開くエンドポイントは以下を満たすこと。
-
-### GET
-
--   HTMLを返す
--   単独テンプレートとして描画可能
--   `#modal` に `innerHTML` で差し込める
-
-### POST
-
--   成功時: `HX-Redirect` を返す
--   失敗時: 同じモーダルHTMLを返す
-
-* * *
-
-## 3.2 成功時レスポンス
-
-成功時は以下を原則とする。
-
-Python
-
-実行する
-
-response = HttpResponse()  
-response["HX-Redirect"] = reverse(...)  
+```python
+response = HttpResponse()
+response['HX-Redirect'] = reverse(...)
 return response
+```
 
-### 理由
+### HTMX 権限エラー
 
--   一覧再描画整合性を担保するため
--   部分差し替えより安全なため
+- `HX-Request: true` の場合は HTML 断片 + 403
+- 通常リクエストは `HttpResponseForbidden`
 
-* * *
+### JSON 補助 API
 
-## 3.3 バリデーションエラー
+- 前日コピーやテンプレート一覧は `JsonResponse`
 
-バリデーションエラー時は以下を原則とする。
+## 3. `productions` 契約
 
--   HTTP 200でよい
--   同じテンプレートを再描画
--   エラーメッセージをテンプレート内に表示
+### 画面系
 
-* * *
+- `GET /productions/`
+  - name: `productions:list`
+  - 公演一覧
 
-## 3.4 Alpine.js の送信形式
+- `GET /productions/create/`
+  - name: `productions:create`
+  - 公演作成画面
 
-bulk edit 系は hidden input に JSON 文字列を詰めて送る。
+- `GET /productions/<pk>/`
+  - name: `productions:detail`
+  - 公演詳細
 
-例:
+- `GET|POST /productions/<pk>/setup/`
+  - name: `productions:setup`
+  - 工程構成セットアップ
 
-HTML
+- `GET /productions/<pk>/processes-partial/`
+  - name: `productions:processes_partial`
+  - 工程一覧部分描画
 
-<input type="hidden" name="requests_json" :value="JSON.stringify(requests)">
+### 工程日編集
 
-サーバー側では
+- `GET|POST /productions/process-day/<pk>/edit/`
+  - name: `productions:process_day_edit`
 
-Python
+- `GET|POST /productions/<production_id>/process-day/add/`
+  - name: `productions:process_day_add`
 
-実行する
+### 人員申請
 
-data_json = request.POST.get("requests_json", "[]")  
-submitted_data = json.loads(data_json)
+- `GET|POST /productions/process-day/<day_pk>/staff-request/`
+  - name: `productions:staff_request_edit`
+  - 旧 UI 互換
 
-で受け取る。
+- `GET|POST /productions/process-day/<day_pk>/staff-requests/`
+  - name: `productions:staff_requests_bulk_edit`
+  - `requests_json` を送信
 
-* * *
+- `GET /productions/process-day/<day_pk>/staff-requests/previous/`
+  - name: `productions:staff_requests_previous`
+  - JSON: `source_date`, `requests`
 
-# 4. ルーティング契約
+### 車両申請
 
-以下は現在の標準ルール。
+- `GET|POST /productions/process-day/<day_pk>/vehicle-requests/`
+  - name: `productions:vehicle_requests_bulk_edit`
+  - `requests_json` を送信
 
-* * *
+- `GET /productions/process-day/<day_pk>/vehicle-requests/previous/`
+  - name: `productions:vehicle_requests_previous`
+  - JSON: `source_date`, `requests`
 
-## 4.1 ProcessDay 編集
+### 車両手配
 
-### GET
+- `GET /productions/<pk>/vehicle-assignments/`
+  - name: `productions:vehicle_assignment_list`
 
-Plain text
+- `GET|POST /productions/vehicle-request/<pk>/assignment/`
+  - name: `productions:vehicle_assignment_edit`
 
-process-day/<int:pk>/edit/
+### 担当者
 
-### name
+- `GET|POST /productions/<production_pk>/members/add/`
+  - name: `productions:member_add`
 
-Plain text
+- `GET|POST /productions/members/<pk>/edit/`
+  - name: `productions:member_edit`
 
-process_day_edit
+- `POST /productions/members/<pk>/delete/`
+  - name: `productions:member_delete`
 
-### 用途
+### 工程ブロック
 
--   工程日基本情報の編集モーダル
+- `GET|POST /productions/block/<process_pk>/edit/`
+  - name: `productions:block_edit`
 
-* * *
+- `POST /productions/block/<process_pk>/delete/`
+  - name: `productions:block_delete`
 
-## 4.2 StaffRequest 単票編集（互換維持用）
+### テンプレート API
 
-### GET / POST
+- `GET /productions/templates/api/`
+  - name: `productions:template_api`
+  - JSON 配列を返す
 
-Plain text
+## 4. `productions` POST ペイロード要約
 
-process-day/<int:day_pk>/staff-request/
+### `staff_requests_bulk_edit`
 
-### name
+- hidden input `requests_json`
+- 各要素:
+  - `position_id`
+  - `quantity`
+  - `start_time`
+  - `end_time`
+  - `note`
 
-Plain text
+### `vehicle_requests_bulk_edit`
 
-staff_request_edit
+- hidden input `requests_json`
+- 各要素:
+  - `requested_vehicle_id`
+  - `request_kind`
+  - `requested_time`
+  - `arrival_requested_time`
+  - `route_from`
+  - `route_to`
+  - `note`
 
-### 用途
+## 5. `performances` 契約
 
--   単票編集
--   旧UI互換用
+- `GET /performances/`
+  - name: `performances:list`
 
-* * *
+- `GET /performances/dashboard/`
+  - name: `performances:dashboard`
 
-## 4.3 StaffRequest 一括編集
+- `GET|POST /performances/create/`
+  - name: `performances:create`
 
-### GET / POST
+- `GET /performances/<pk>/`
+  - name: `performances:detail`
 
-Plain text
+- `POST /performances/<pk>/delete/`
+  - name: `performances:delete`
 
-process-day/<int:day_pk>/staff-requests/
+- `POST /performances/<pk>/apply-template/`
+  - name: `performances:apply_template`
 
-### name
+- `POST /performances/<pk>/phases/add/`
+  - name: `performances:phase_add`
 
-Plain text
+- `POST /performances/phases/<pk>/delete/`
+  - name: `performances:phase_delete`
 
-staff_requests_bulk_edit
+- `POST /performances/phases/<pk>/update/`
+  - name: `performances:phase_update`
 
-### 用途
+- `POST /performances/<pk>/phases/reorder/`
+  - name: `performances:phase_reorder`
 
--   人員手配一括編集モーダル
+- `POST /performances/<pk>/vehicles/add/`
+  - name: `performances:vehicle_operation_add`
 
-* * *
+- `POST /performances/vehicles/<pk>/delete/`
+  - name: `performances:vehicle_operation_delete`
 
-## 4.4 StaffRequest 前日コピー
+- `POST /performances/<pk>/vehicles/batch-delete/`
+  - name: `performances:vehicle_operation_batch_delete`
 
-### GET
+- `GET /performances/<pk>/report/performance/`
+  - name: `performances:report_performance`
 
-Plain text
+- `GET /performances/<pk>/report/financial/`
+  - name: `performances:report_financial`
 
-process-day/<int:day_pk>/staff-requests/previous/
+## 6. 旧設計との差分
 
-### name
-
-Plain text
-
-staff_requests_previous
-
-### 用途
-
--   過去の人員構成取得
--   JSON返却
-
-* * *
-
-## 4.5 VehicleRequest 一括編集
-
-### GET / POST
-
-Plain text
-
-process-day/<int:day_pk>/vehicle-requests/
-
-### name
-
-Plain text
-
-vehicle_requests_bulk_edit
-
-### 用途
-
--   車両申請一括編集モーダル
-
-* * *
-
-## 4.6 VehicleRequest 直近コピー
-
-### GET
-
-Plain text
-
-process-day/<int:day_pk>/vehicle-requests/previous/
-
-### name
-
-Plain text
-
-vehicle_requests_previous
-
-### 用途
-
--   実装名は previous のままでもよい
--   意味としては **直近の有効な車両申請を返す**
--   JSON返却
-
-* * *
-
-# 5. HTML返却型 Contract
-
-* * *
-
-# 5.1 ProcessDayEditView
-
-## GET 入力
-
--   `pk`
-
-## GET 出力
-
--   `productions/process_day_form.html`
-
-## context
-
-Python
-
-実行する
-
-{  
-    "day": ProcessDay,  
-    "form": ProcessDayForm,  
-}
-
-## POST 成功
-
--   `HX-Redirect: productions:detail`
-
-## POST 失敗
-
--   同テンプレート再描画
-
-* * *
-
-# 5.2 StaffRequestBulkEditView
-
-## GET 入力
-
--   `day_pk`
-
-## GET 出力
-
--   `productions/staff_request_bulk_form.html`
-
-## context
-
-Python
-
-実行する
-
-{  
-    "day": ProcessDay,  
-    "initial_requests": [  
-        {  
-            "position_id": int,  
-            "quantity": int,  
-            "note": str,  
-        }  
-    ],  
-    "positions": QuerySet[Position],  
-}
-
-## POST 入力
-
-`requests_json`
-
-### 期待JSON
-
-JSON
-
-[  
-  {  
-    "position_id": 1,  
-    "quantity": 2,  
-    "note": "サブ卓あり"  
-  }  
-]
-
-## POST 成功
-
--   `HX-Redirect`
-
-## POST 失敗 context
-
-Python
-
-実行する
-
-{  
-    "day": ProcessDay,  
-    "positions": QuerySet[Position],  
-    "initial_requests": submitted_data,  
-    "error_message": str,  
-}
-
-* * *
-
-# 5.3 VehicleRequestBulkEditView
-
-## GET 入力
-
--   `day_pk`
-
-## GET 出力
-
--   `productions/vehicle_request_bulk_form.html`
-
-## context
-
-Python
-
-実行する
-
-{  
-    "day": ProcessDay,  
-    "initial_requests": [  
-        {  
-            "requested_vehicle_id": int,  
-            "request_kind": str,  
-            "requested_time": "HH:MM" or "",  
-            "route_from": str,  
-            "route_to": str,  
-            "note": str,  
-        }  
-    ],  
-    "vehicles": QuerySet[Vehicle],  
-}
-
-## POST 入力
-
-`requests_json`
-
-### 期待JSON
-
-JSON
-
-[  
-  {  
-    "requested_vehicle_id": 1,  
-    "request_kind": "pickup",  
-    "requested_time": "18:00",  
-    "route_from": "新宿村スタジオ",  
-    "route_to": "赤堤倉庫",  
-    "note": "倉庫戻し"  
-  }  
-]
-
-## POST 成功
-
--   `HX-Redirect`
-
-## POST 失敗 context
-
-Python
-
-実行する
-
-{  
-    "day": ProcessDay,  
-    "vehicles": QuerySet[Vehicle],  
-    "initial_requests": submitted_data,  
-    "error_message": str,  
-}
-
-* * *
-
-# 6. JSON返却型 Contract
-
-* * *
-
-# 6.1 StaffRequest 前日コピー
-
-## endpoint
-
-Plain text
-
-staff_requests_previous
-
-## method
-
-GET
-
-## 入力
-
--   `day_pk`
-
-## 正常返却
-
-JSON
-
-{  
-  "source_date": "2026/03/01",  
-  "requests": [  
-    {  
-      "position_id": 1,  
-      "quantity": 2,  
-      "note": ""  
-    }  
-  ]  
-}
-
-## コピー元なし
-
-JSON
-
-{  
-  "source_date": null,  
-  "requests": []  
-}
-
-* * *
-
-# 6.2 VehicleRequest 直近コピー
-
-## endpoint
-
-Plain text
-
-vehicle_requests_previous
-
-## method
-
-GET
-
-## 入力
-
--   `day_pk`
-
-## 意味
-
--   同一 Production
--   現在日より過去
--   `vehicle_requests` が存在する ProcessDay
--   その中で最も近いもの
-
-## 正常返却
-
-JSON
-
-{  
-  "source_date": "2026/03/01",  
-  "requests": [  
-    {  
-      "requested_vehicle_id": 1,  
-      "request_kind": "pickup",  
-      "requested_time": "18:00",  
-      "route_from": "新宿村スタジオ",  
-      "route_to": "赤堤倉庫",  
-      "note": "倉庫戻し"  
-    }  
-  ]  
-}
-
-## コピー元なし
-
-JSON
-
-{  
-  "source_date": null,  
-  "requests": []  
-}
-
-* * *
-
-# 7. フロントエンド契約
-
-* * *
-
-## 7.1 モーダルターゲット
-
-すべてのモーダル系 HTMX GET は原則以下を使用。
-
-HTML
-
-hx-target="#modal"  
-hx-swap="innerHTML"
-
-* * *
-
-## 7.2 モーダル内部POST
-
-モーダル内部フォームの POST は原則以下。
-
-### 通常
-
-HTML
-
-hx-post="..."  
-hx-target="#modal-container"  
-hx-swap="outerHTML"
-
-### 理由
-
--   バリデーションエラー時にモーダル全体を差し替えるため
-
-* * *
-
-## 7.3 Alpine 初期化
-
-HTMX差し替え後は Alpine を再初期化する必要がある。  
-base.html 側で `htmx:afterSwap` を拾って `Alpine.initTree()` を行う前提。
-
-* * *
-
-## 7.4 bulk edit hidden input
-
-### Staff
-
-HTML
-
-<input type="hidden" name="requests_json" :value="JSON.stringify(requests)">
-
-### Vehicle
-
-HTML
-
-<input type="hidden" name="requests_json" :value="JSON.stringify(requests)">
-
-送信前に `prepareSubmit()` で型を整える。
-
-* * *
-
-# 8. サーバー側バリデーション契約
-
-* * *
-
-## 8.1 StaffRequestBulkEditView
-
-### 必須チェック
-
--   position_id が実在する
--   quantity >= 1
--   同一 ProcessDay 内で position 重複禁止
-
-### 許可
-
--   position未選択行は無視
-
-* * *
-
-## 8.2 VehicleRequestBulkEditView
-
-### 必須チェック
-
--   requested_vehicle_id が実在する
--   request_kind が許可値内
--   requested_time は空なら null 許可
--   route_from / route_to は trim 後保存
-
-### 許可
-
--   requested_vehicle未選択行は無視
--   同一車両重複は **現仕様では許可**
-    
-    -   理由: 別時間・別目的で複数便を申請できるため
-
-* * *
-
-# 9. Query / Prefetch 契約
-
-一覧画面では N+1 を避けること。
-
-## ProductionDetailView の ProcessDay 取得時
-
-最低限以下を prefetch する。
-
-Python
-
-実行する
-
-.prefetch_related(  
-    "staff_requests",  
-    "staff_requests__position",  
-    "vehicle_requests",  
-    "vehicle_requests__requested_vehicle",  
-)
-
-* * *
-
-# 10. エラーメッセージ方針
-
-## HTMLモーダル
-
--   `error_message` を context に載せる
--   テンプレート上部に表示する
-
-## JSON API
-
--   コピー元なしは 200 + 空配列で返す
--   例外は必要に応じて 400 / 500 でもよいが、通常運用では「空」で扱う方が UI は安定する
-
-* * *
-
-# 11. 命名ルール
-
-## View
-
--   `XxxBulkEditView`
--   `PreviousXxxView`
-
-## URL name
-
--   `xxx_bulk_edit`
--   `xxx_previous`
-
-## JSON key
-
--   snake_case
--   datetime/time は文字列化して返す
-
-* * *
-
-# 12. 将来拡張時の契約
-
-将来、管理側配車UIを作る場合も、申請側 Contract は壊さない。
-
-### 申請側
-
--   ProcessDay単位
--   断片的な希望
-
-### 管理側
-
--   Performance単位
--   統合・分割・並び替え可能な運行構築
-
-つまり、
-
-Plain text
-
-VehicleRequest != VehicleOperation
-
-は常に維持する。
-
-* * *
-
-# 13. AI実装時の注意
-
-1.  成功時は HX-Redirect を返す
-2.  バリデーション失敗時はモーダルHTML再描画
-3.  bulk edit は requests_json で統一
-4.  JSON返却仕様を勝手に変えない
-5.  HTMX target / swap を勝手に変えない
-6.  Alpine 再初期化前提を壊さない
-7.  Request と Operation を混同しない
-
-* * *
-
-# 14. 最終原則
-
-Plain text
-
-HTML編集はHTMXモーダル  
-複数行編集はAlpine + requests_json  
-成功時はHX-Redirect  
-補助取得はJSON  
-申請は断片  
-運行は管理側で構築
-
+- `productions` は JSON API 群ではなく Django View + HTMX 契約が中心
+- `performances` の Lock API はまだ公開 View 化されていない
+- 監査ログ API は未実装

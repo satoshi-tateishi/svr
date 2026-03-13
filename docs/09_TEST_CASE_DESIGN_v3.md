@@ -1,140 +1,83 @@
-# 09_TEST_CASE_DESIGN_v3.md
+# テストケース詳細設計書
 
-## 公演手配管理システム テストケース詳細設計書（人員・配車・乖離分析統合版）
+## 1. 現在の重点対象
 
-* * *
+現行実装に照らして優先度が高いのは次の領域です。
 
-# 1. テスト戦略（v3）
+1. Portal JWT 認証とユーザー同期
+2. `productions` の一括編集 UI
+3. `performances` のテンプレート展開
+4. ダブルブッキング防止
+5. Lock と PDF
 
-## 重点検証項目
+## 2. `performances` サービス
 
-1.  **テンプレート整合性**: 1〜9の工程が漏れなく、正しい順序で生成されるか。
-2.  **配車乖離（Drift）**: 希望時間と確定時間の差分が正しく計算・記録されるか。
-3.  **統合スナップショット**: 人員単価と車輌原価が1つのLockで同時に固定されるか。
-4.  **ダブルブッキング**: 人員だけでなく、**「車輌」**の重複も阻止できるか。
-5.  **不変性の死守**: Lockされた配車工程の時間や車輌が絶対に書き換えられないか。
+### `PhaseService`
 
-* * *
+- 工程数が 10 件で生成される
+- 二重展開が拒否される
+- 各 `Phase` に `PhaseSlot` が 1 件作成される
 
-# 2. 工程テンプレート（Phase）テスト
+### `AssignmentService`
 
-### TC-PH-01 テンプレート一括生成
+- 人員重複が拒否される
+- 車輌重複が拒否される
+- 外注車輌は重複チェック除外になる
 
--   **前提**: 新規公演作成済み。
--   **操作**: `PhaseService.apply_production_template` を実行。
--   **期待**:
-    
-    -   9つのPhase（機材作り〜最終荷降ろし）が生成される。
-    -   各Phaseに最低1つの `PhaseSlot` (Draft) が紐付いている。
+### `LockService`
 
-### TC-PH-02 カスタム工程の追加
+- `lock_phase_slot()` で `PhaseSlot.status` が `LOCKED` になる
+- `StaffAssignment.applied_*` が保存される
+- `lock_vehicle_operation()` で `VehicleOperation.status` が `LOCKED` になる
+- 外注原価 0 円時は `ZeroCostWarning`
 
--   **操作**: テンプレート展開後、手動で「録音」フェーズを追加。
--   **期待**: 既存のテンプレート工程を壊さずに追加でき、順序制御（order）が正しく機能する。
+### `ReportService`
 
-* * *
+- Lock 済みデータがなければ `ValidationError`
+- 公演手配書は金額を出さない
+- 手配実績証明書は `applied_*` から金額集計する
 
-# 3. 配車・運行（Vehicle）テスト
+### `DashboardQueryService`
 
-### TC-VH-01 希望時間の保持
+- 人員不足抽出
+- 時間乖離抽出
+- Lock 漏れ抽出
 
--   **操作**: 制作が `requested_start/end` を入力。
--   **期待**: `scheduled_start/end` が空の状態で保存される。
+## 3. `productions` View
 
-### TC-VH-02 確定時間の上書き禁止
+### `StaffRequestBulkEditView`
 
--   **操作**: 管理者が `scheduled_start` を入力。
--   **期待**: `requested_start` の値が書き換わらずに保持されていること。
+- `requests_json` の JSON 形式不正で再描画
+- 数量 0 以下でエラー
+- 終了時間のみ入力でエラー
+- 開始時間 >= 終了時間でエラー
+- 正常保存時は `HX-Redirect`
 
-### TC-VH-03 車輌のダブルブッキング
+### `VehicleRequestBulkEditView`
 
--   **操作**: 同一の車輌を、時間が重複する2つの `VehicleOperation` に割り当て。
--   **期待**: `AssignmentService` で `ValidationError` が発生する。
+- `requests_json` の JSON 形式不正で再描画
+- 不正な車両 ID を拒否
+- 正常保存時は `HX-Redirect`
+- 前日コピー API が期待 JSON を返す
 
-* * *
+### 権限 Mixins
 
-# 4. 乖離比較・バリデーションテスト
+- HTMX 時は HTML 403
+- 通常リクエスト時は通常 403
+- `admin/editor` と `ProductionMember` の差を確認する
 
-### TC-GAP-01 人員不足でのLock
+## 4. Portal JWT
 
--   **前提**: 希望3名、アサイン2名。
--   **操作**: Lock実行。
--   **期待**:
-    
-    -   警告が表示される。
-    -   理由（Reason）を入力すればLock成功。
-    -   ログに `staff_count_gap: -1` が記録される。
+- `sub` 一致で既存プロフィールへログイン
+- email 一致で `portal_uuid` 自動リンク
+- 未登録なら新規作成
+- 無効トークンは認証しない
 
-### TC-GAP-02 大幅な時間変更（Drift）
+## 5. 未実装前提で除外する項目
 
--   **前提**: 希望10:00、確定12:00（120分差）。
--   **操作**: Lock実行。
--   **期待**:
-    
-    -   `schedule_drift_minutes: 120` がスナップショットに保存される。
+以下は旧版の想定だったが、現行テスト設計から外す。
 
-* * *
-
-# 5. 統合スナップショットテスト（最重要）
-
-### TC-SNAP-06 人員・配車同時Lock
-
--   **操作**: `LockService.lock_execution` を実行。
--   **期待**:
-    
-    -   `FinancialSnapshot` が1レコード生成される。
-    -   `applied_staff_cost` と `applied_vehicle_cost` の両方に金額が入る。
-    -   ハッシュ値が全データ（人員・車輌・時間）を元に生成される。
-
-### TC-SNAP-07 外注原価未入力の検知
-
--   **前提**: 外注車輌をアサインしたが、原価（Cost）が 0円。
--   **操作**: Lock実行。
--   **期待**: 管理者へ「外注原価が0円ですが確定しますか？」の確認が出る。
-
-* * *
-
-# 6. 監査ログ(AuditLog)検証
-
-### TC-LOG-06 テンプレート適用ログ
-
--   **期待**: `PHASE_TEMPLATE_APPLIED` イベントが記録され、生成されたID群が保持される。
-
-### TC-LOG-07 時間乖離承認ログ
-
--   **期待**: Lock時のログの `after_state` に、なぜ時間がずれたかの「理由（Reason）」が含まれている。
-
-* * *
-
-# 7. 状態遷移と権限（セキュリティ）
-
-### TC-SEC-05 Chiefによる原価閲覧試行
-
--   **前提**: 公演内ロールが `Chief` のユーザー。
--   **操作**: スナップショットのJSONデータをAPI経由で取得試行。
--   **期待**: 金額関連のフィールド（unit_price等）がマスクまたは除外されている。
-
-### TC-SEC-06 Locked後の車輌変更
-
--   **操作**: ステータスが `Locked` の `VehicleOperation` に対して車輌の再割当を実行。
--   **期待**: `PermissionDenied` または `ValidationError` で阻止される。
-
-* * *
-
-# 8. パフォーマンス・負荷テスト
-
-### TC-PERF-04 大規模テンプレート展開
-
--   **操作**: 100件の案件に対して一斉にテンプレートを適用。
--   **期待**: DBデッドロックが発生せず、30秒以内に完了する。
-
-* * *
-
-# v3 完成度評価
-
--   **業務適合性**: 演劇制作特有の「希望と実態の差」をテスト可能。
--   **不変性保証**: Lock後の人員・車輌・時間の変更阻止を網羅。
--   **テンプレート信頼性**: 一括生成による入力ミス防止を検証可能。
-
-
-
+- `FinancialSnapshot`
+- 監査ログの `before_state/after_state`
+- Unlock
+- Drift 理由入力必須

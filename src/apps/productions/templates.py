@@ -101,15 +101,15 @@ BLOCK_PROCESS_TYPE_MAP = {
 # ProcessBlockEditView で使用する Position スラッグのマッピング
 BLOCK_POSITION_MAP = {
     'rehearsal_setup': {
-        'setup-crew': '仕込み人数',  # 稽古場仕込み人員
+        'setup-crew': '仕込み',  # 稽古場仕込み人員
     },
     'rehearsal_strike': {
-        'strike-crew': 'バラシ人数',  # 稽古場バラシ人員
+        'strike-crew': 'バラシ',  # 稽古場バラシ人員
         'loading': '積み込み',  # 稽古場搬出人員
         'unloading': '荷降ろし',  # 倉庫荷降ろし人員
     },
     'theatre_setup': {
-        'setup-crew': '仕込み人数',  # 劇場仕込み人員
+        'setup-crew': '仕込み',  # 劇場仕込み人員
     },
     'theatre_strike': {
         'strike-crew': 'バラシ',  # 劇場バラシ人員

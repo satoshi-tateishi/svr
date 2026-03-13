@@ -1,63 +1,184 @@
 <script>
-function staffDaysApp() {
+function requestUnitsApp(blockKey) {
   return {
-    days: [],
+    blockKey,
+    units: [],
     positionList: [],
 
     init() {
-      // json_script タグから安全に読み取る（x-data 属性への直接埋め込みは " の衝突でNG）
-      const daysEl = document.getElementById('days-data-json');
+      const unitsEl = document.getElementById('request-units-data-json');
       const posEl = document.getElementById('position-list-json');
-      const initialDays = daysEl ? JSON.parse(daysEl.textContent) : [];
-      const positionList = posEl ? JSON.parse(posEl.textContent) : [];
+      const initialUnits = unitsEl ? JSON.parse(unitsEl.textContent) : [];
+      this.positionList = posEl ? JSON.parse(posEl.textContent) : [];
 
-      this.positionList = positionList;
+      this.units = Array.isArray(initialUnits) && initialUnits.length > 0
+        ? initialUnits.map((unit, idx) => this.normalizeUnit(unit, idx))
+        : [this.defaultInitialUnit()];
+    },
 
-      const src = (Array.isArray(initialDays) && initialDays.length > 0) ? initialDays : [];
-      this.days = src.map(d => ({
-        date: d.date || '',
-        standby_time: d.standby_time || '',
-        setup_label: d.setup_label || 'setup_staff',
-        positions: Object.fromEntries(
-          positionList.map(p => [p.slug, {
-            qty: (d.positions && d.positions[p.slug] != null)
-              ? d.positions[p.slug].qty : '',
-            include_self: (d.positions && d.positions[p.slug])
-              ? d.positions[p.slug].include_self : true,
-          }])
-        ),
+    defaultInitialUnit() {
+      return this.blockKey === 'travel_load' || this.blockKey === 'travel_unload'
+        ? this.blankTransportUnit(0)
+        : this.blankStaffUnit(0);
+    },
+
+    blankVehicle() {
+      return {
+        requested_vehicle_id: '',
+        request_kind: 'load_in',
+        requested_time: '',
+        arrival_requested_time: '',
+        route_from: '',
+        route_to: '',
+        note: '',
+        loading_qty: '',
+        loading_include_self: true,
+        unloading_qty: '',
+        unloading_include_self: true,
+      };
+    },
+
+    blankStaffRows() {
+      return this.positionList.map((position) => ({
+        slug: position.slug,
+        label: position.label,
+        qty: '',
+        include_self: true,
       }));
-      if (this.days.length === 0) this.addDay();
     },
 
-    addDay() {
-      this.days.push({
-        date: '',
-        standby_time: '',
+    blankTransportUnit(idx) {
+      return {
+        client_id: `unit-${Date.now()}-${idx}`,
+        id: '',
+        unit_type: 'transport',
+        order: idx,
+        work_date: '',
+        start_time: '',
+        end_time: '',
+        note: '',
+        setup_label: '',
+        vehicle: this.blankVehicle(),
+        staff_rows: [],
+      };
+    },
+
+    blankStaffUnit(idx) {
+      return {
+        client_id: `unit-${Date.now()}-${idx}`,
+        id: '',
+        unit_type: 'staffing',
+        order: idx,
+        work_date: '',
+        start_time: '',
+        end_time: '',
+        note: '',
         setup_label: 'setup_staff',
-        positions: Object.fromEntries(
-          this.positionList.map(p => [p.slug, { qty: '', include_self: true }])
-        ),
-      });
+        vehicle: null,
+        staff_rows: this.blankStaffRows(),
+      };
     },
 
-    duplicateDay(idx) {
-      const copy = JSON.parse(JSON.stringify(this.days[idx]));
-      if (copy.date) {
-        // new Date('YYYY-MM-DD') は UTC 解釈で JST では前日になるため、ローカル日付で計算する
-        const [y, m, d] = copy.date.split('-').map(Number);
-        const dt = new Date(y, m - 1, d + 1);
-        copy.date = [
-          dt.getFullYear(),
-          String(dt.getMonth() + 1).padStart(2, '0'),
-          String(dt.getDate()).padStart(2, '0'),
-        ].join('-');
+    normalizeUnit(unit, idx) {
+      const unitType = unit.unit_type === 'transport' ? 'transport' : 'staffing';
+      const blank = unitType === 'transport'
+        ? this.blankTransportUnit(idx)
+        : this.blankStaffUnit(idx);
+      const incomingRows = Array.isArray(unit.staff_rows) ? unit.staff_rows : [];
+      const rowMap = Object.fromEntries(incomingRows.map((row) => [row.slug, row]));
+      return {
+        ...blank,
+        ...unit,
+        unit_type: unitType,
+        client_id: unit.client_id || blank.client_id,
+        vehicle: unitType === 'transport'
+          ? {
+              ...blank.vehicle,
+              ...(unit.vehicle || {}),
+              requested_vehicle_id: unit.vehicle?.requested_vehicle_id
+                ? String(unit.vehicle.requested_vehicle_id)
+                : '',
+              loading_qty: unit.vehicle?.loading_qty != null && unit.vehicle.loading_qty !== ''
+                ? String(unit.vehicle.loading_qty)
+                : '',
+              unloading_qty: unit.vehicle?.unloading_qty != null && unit.vehicle.unloading_qty !== ''
+                ? String(unit.vehicle.unloading_qty)
+                : '',
+            }
+          : null,
+        note: unitType === 'staffing' ? (unit.note || '') : '',
+        setup_label: unitType === 'staffing' ? (unit.setup_label || 'setup_staff') : '',
+        staff_rows: unitType === 'staffing'
+          ? this.positionList.map((position) => ({
+              slug: position.slug,
+              label: position.label,
+              qty: rowMap[position.slug]?.qty != null && rowMap[position.slug]?.qty !== ''
+                ? String(rowMap[position.slug].qty)
+                : '',
+              include_self: rowMap[position.slug]?.include_self ?? true,
+            }))
+          : [],
+      };
+    },
+
+    addTransportUnit() {
+      this.units.push(this.blankTransportUnit(this.units.length));
+    },
+
+    addStaffUnit() {
+      if (this.blockKey === 'travel_load' || this.blockKey === 'travel_unload') {
+        return;
       }
-      this.days.splice(idx + 1, 0, copy);
+      this.units.push(this.blankStaffUnit(this.units.length));
     },
 
-    removeDay(idx) {
-      if (this.days.length > 1) this.days.splice(idx, 1);
+    duplicateUnit(idx) {
+      const copy = JSON.parse(JSON.stringify(this.units[idx]));
+      copy.client_id = `unit-${Date.now()}-${idx}`;
+      this.units.splice(idx + 1, 0, this.normalizeUnit(copy, idx + 1));
+    },
+
+    removeUnit(idx) {
+      if (this.units.length > 1) {
+        this.units.splice(idx, 1);
+      }
+    },
+
+    serializedUnits() {
+      return JSON.stringify(
+        this.units.map((unit, idx) => ({
+          id: unit.id || '',
+          unit_type: unit.unit_type,
+          order: idx,
+          work_date: unit.work_date || '',
+          start_time: unit.start_time || '',
+          end_time: unit.end_time || '',
+          note: unit.unit_type === 'staffing' ? (unit.note || '') : '',
+          setup_label: unit.unit_type === 'staffing' ? (unit.setup_label || '') : '',
+          vehicle: unit.unit_type === 'transport'
+            ? {
+                requested_vehicle_id: unit.vehicle?.requested_vehicle_id || '',
+                request_kind: unit.vehicle?.request_kind || 'load_in',
+                requested_time: unit.vehicle?.requested_time || '',
+                arrival_requested_time: unit.vehicle?.arrival_requested_time || '',
+                route_from: unit.vehicle?.route_from || '',
+                route_to: unit.vehicle?.route_to || '',
+                note: unit.vehicle?.note || '',
+                loading_qty: unit.vehicle?.loading_qty || '',
+                loading_include_self: !!unit.vehicle?.loading_include_self,
+                unloading_qty: unit.vehicle?.unloading_qty || '',
+                unloading_include_self: !!unit.vehicle?.unloading_include_self,
+              }
+            : null,
+          staff_rows: unit.unit_type === 'staffing'
+            ? (unit.staff_rows || []).map((row) => ({
+                slug: row.slug,
+                qty: row.qty || '',
+                include_self: !!row.include_self,
+              }))
+            : [],
+        }))
+      );
     },
   };
 }

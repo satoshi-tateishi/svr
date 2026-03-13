@@ -1,317 +1,243 @@
 {% if block_key == 'sumida_check' %}
-{# ── すみだものチェック ── #}
 <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
   <h2 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
     <i class="fa-solid fa-warehouse text-sky-500"></i> すみだ便の確認
   </h2>
   <div class="flex gap-4">
-    <label class="flex-1 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all
-                  {% if process.sumida_required == True %}border-sky-400 bg-sky-50{% else %}border-gray-200{% endif %}">
-      <input type="radio" name="sumida_required" value="1"
-             {% if process.sumida_required == True %}checked{% endif %}
-             class="w-4 h-4 text-sky-600">
+    <label class="flex-1 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all {% if process.sumida_required == True %}border-sky-400 bg-sky-50{% else %}border-gray-200{% endif %}">
+      <input type="radio" name="sumida_required" value="1" {% if process.sumida_required == True %}checked{% endif %} class="w-4 h-4 text-sky-600">
       <div>
         <div class="text-sm font-bold text-gray-900">必要</div>
         <div class="text-[10px] text-gray-400">すみだ便を申請</div>
       </div>
     </label>
-    <label class="flex-1 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all
-                  {% if process.sumida_required == False %}border-gray-400 bg-gray-50{% else %}border-gray-200{% endif %}">
-      <input type="radio" name="sumida_required" value="0"
-             {% if process.sumida_required == False %}checked{% endif %}
-             class="w-4 h-4 text-gray-600">
+    <label class="flex-1 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all {% if process.sumida_required == False %}border-gray-400 bg-gray-50{% else %}border-gray-200{% endif %}">
+      <input type="radio" name="sumida_required" value="0" {% if process.sumida_required == False %}checked{% endif %} class="w-4 h-4 text-gray-600">
       <div>
         <div class="text-sm font-bold text-gray-900">不要</div>
         <div class="text-[10px] text-gray-400">すみだ便なし</div>
       </div>
     </label>
   </div>
-  <div class="mt-4">
-    <label class="block text-[10px] font-bold text-gray-500 mb-1">備考</label>
-    <textarea name="note" rows="3"
-              class="form-textarea block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500"
-              placeholder="備考があれば入力">{{ process.note|default:'' }}</textarea>
-  </div>
 </div>
-
 {% elif block_key == 'kizai_standby' %}
-{# ── 本番機材スタンバイ ── #}
 <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
   <h2 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
     <i class="fa-solid fa-person-digging text-amber-500"></i> 助っ人の確認
   </h2>
   <div class="flex gap-4">
-    <label class="flex-1 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all
-                  {% if process.assistant_required == True %}border-amber-400 bg-amber-50{% else %}border-gray-200{% endif %}">
-      <input type="radio" name="assistant_required" value="1"
-             {% if process.assistant_required == True %}checked{% endif %}
-             class="w-4 h-4 text-amber-600">
+    <label class="flex-1 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all {% if process.assistant_required == True %}border-amber-400 bg-amber-50{% else %}border-gray-200{% endif %}">
+      <input type="radio" name="assistant_required" value="1" {% if process.assistant_required == True %}checked{% endif %} class="w-4 h-4 text-amber-600">
       <div>
         <div class="text-sm font-bold text-gray-900">必要</div>
         <div class="text-[10px] text-gray-400">助っ人を申請</div>
       </div>
     </label>
-    <label class="flex-1 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all
-                  {% if process.assistant_required == False %}border-gray-400 bg-gray-50{% else %}border-gray-200{% endif %}">
-      <input type="radio" name="assistant_required" value="0"
-             {% if process.assistant_required == False %}checked{% endif %}
-             class="w-4 h-4 text-gray-600">
+    <label class="flex-1 flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all {% if process.assistant_required == False %}border-gray-400 bg-gray-50{% else %}border-gray-200{% endif %}">
+      <input type="radio" name="assistant_required" value="0" {% if process.assistant_required == False %}checked{% endif %} class="w-4 h-4 text-gray-600">
       <div>
         <div class="text-sm font-bold text-gray-900">不要</div>
         <div class="text-[10px] text-gray-400">助っ人なし</div>
       </div>
     </label>
   </div>
-  <div class="mt-4">
-    <label class="block text-[10px] font-bold text-gray-500 mb-1">備考</label>
-    <textarea name="note" rows="3"
-              class="form-textarea block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500"
-              placeholder="備考があれば入力">{{ process.note|default:'' }}</textarea>
-  </div>
 </div>
-
 {% else %}
-{# ── 単日工程ブロック（仕込み / バラシ / 旅荷積み / 降ろし） ── #}
-{{ days_data|json_script:"days-data-json" }}
+{{ request_units_data|json_script:"request-units-data-json" }}
 {{ position_list|json_script:"position-list-json" }}
-<div class="{% if block_key == 'rehearsal_strike' %}flex flex-col gap-4{% else %}space-y-4{% endif %}"
-     x-data="staffDaysApp()"
-     x-init="init()">
+<div class="space-y-4" x-data="requestUnitsApp('{{ block_key }}')" x-init="init()">
+  <input type="hidden" name="request_units_json" :value="serializedUnits()">
 
-  <input type="hidden" name="staff_days_json" :value="JSON.stringify(days)">
-
-  <!-- 車両申請 -->
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5{% if block_key == 'rehearsal_strike' %} order-2{% endif %}">
+  {% if block_key == 'travel_unload' %}
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
     <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-      <i class="fa-solid fa-truck text-gray-300"></i> {% if block_key == 'rehearsal_strike' %}搬出・倉庫荷降ろし{% else %}荷積み・搬入{% endif %}
+      <i class="fa-solid fa-flag-checkered text-gray-300"></i> 最終公演地
     </h3>
-    <div class="space-y-3">
-      <!-- ヘッダー行: 配車日 | 希望車種 -->
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-[10px] font-bold text-gray-500 mb-1">
-            配車日
-          </label>
-          <input type="date" name="vehicle_date"
-                 value="{{ existing_vehicle.date|date:'Y-m-d'|default:'' }}"
-                 class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
-        </div>
-        <div>
-          <label class="block text-[10px] font-bold text-gray-500 mb-1">希望車種</label>
-          <select name="vehicle_id"
-                  class="form-select block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2.5">
-            <option value="">--- 未定 ---</option>
-            {% for v in vehicles %}
-              <option value="{{ v.pk }}"
-                      {% if existing_vehicle and existing_vehicle.requested_vehicle.pk == v.pk %}selected{% elif not existing_vehicle and v.name == '新音車' %}selected{% endif %}>
-                {{ v.name }}（{{ v.get_vehicle_type_display }}）
-              </option>
-            {% endfor %}
-          </select>
-        </div>
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div>
+        <label class="block text-[10px] font-bold text-gray-500 mb-1">最終公演地搬出日</label>
+        <input type="date" name="final_performance_load_out_date" value="{% if post_data %}{{ post_data.final_performance_load_out_date }}{% else %}{{ final_performance_load_out_date|date:'Y-m-d'|default:'' }}{% endif %}" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
       </div>
-      <!-- 2グループ: 積み込み側 ➡️ 搬入側 -->
-      <div class="flex gap-2 items-start">
-        <!-- 左グループ: 積み込み側 -->
-        <div class="flex-1 bg-gray-50 rounded-xl p-3 space-y-3">
-          <div>
-            <label class="block text-[10px] font-bold text-gray-500 mb-1">配車希望時間</label>
-            <input type="time" name="requested_time"
-                   value="{{ existing_vehicle.requested_time|time:'H:i'|default:'' }}"
-                   onfocus="if(!this.value)this.value='12:00'"
-                   class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-gray-500 mb-1">出発地</label>
-            <input type="text" name="route_from"
-                   value="{{ existing_vehicle.route_from|default:'' }}"
-                   class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2"
-                   placeholder="{% if block_key == 'rehearsal_strike' %}例: すみだ4St{% else %}例: 赤堤倉庫{% endif %}">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_strike' %}搬出人数{% else %}積み込み人数{% endif %}</label>
-            <div class="flex items-center gap-1.5">
-              <select name="loading_qty"
-                      class="form-select w-20 rounded-xl border-gray-200 text-sm text-center focus:ring-indigo-500 py-2">
-                <option value="">-</option>
-                {% for n in "123456789" %}
-                <option value="{{ forloop.counter }}"
-                        {% if existing_vehicle.loading_qty == forloop.counter %}selected{% endif %}>
-                  {{ forloop.counter }}
-                </option>
-                {% endfor %}
-              </select>
-              <span class="text-xs text-gray-400">人</span>
-            </div>
-          </div>
-          <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-            <input type="checkbox" name="loading_include_self" value="1"
-                   {% if existing_vehicle.loading_include_self or not existing_vehicle %}checked{% endif %}
-                   class="rounded text-indigo-600 w-3.5 h-3.5">
-            <span>本人含む</span>
-          </label>
-        </div>
-        <!-- 矢印 -->
-        <div class="flex-none self-center text-gray-300">
-          <i class="fa-solid fa-arrow-right text-xs"></i>
-        </div>
-        <!-- 右グループ: 搬入側 -->
-        <div class="flex-1 bg-gray-50 rounded-xl p-3 space-y-3">
-          <div>
-            <label class="block text-[10px] font-bold text-gray-500 mb-1">
-              {% if block_key == 'rehearsal_setup' or block_key == 'theatre_setup' or block_key == 'travel_load' %}到着希望時間{% else %}倉庫到着予想時間{% endif %}
-            </label>
-            <input type="time" name="arrival_requested_time"
-                   value="{{ existing_vehicle.arrival_requested_time|time:'H:i'|default:'' }}"
-                   onfocus="if(!this.value)this.value='12:00'"
-                   class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-gray-500 mb-1">目的地</label>
-            <input type="text" name="route_to"
-                   value="{{ existing_vehicle.route_to|default:'' }}"
-                   class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2"
-                   placeholder="{% if block_key == 'rehearsal_strike' %}例: 赤堤倉庫{% else %}例: すみだ4St{% endif %}">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_strike' %}荷降ろし人数{% else %}搬入人数{% endif %}</label>
-            <div class="flex items-center gap-1.5">
-              <select name="unloading_qty"
-                      class="form-select w-20 rounded-xl border-gray-200 text-sm text-center focus:ring-indigo-500 py-2">
-                <option value="">-</option>
-                {% for n in "123456789" %}
-                <option value="{{ forloop.counter }}"
-                        {% if existing_vehicle.unloading_qty == forloop.counter %}selected{% endif %}>
-                  {{ forloop.counter }}
-                </option>
-                {% endfor %}
-              </select>
-              <span class="text-xs text-gray-400">人</span>
-            </div>
-          </div>
-          <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-            <input type="checkbox" name="unloading_include_self" value="1"
-                   {% if existing_vehicle.unloading_include_self or not existing_vehicle %}checked{% endif %}
-                   class="rounded text-indigo-600 w-3.5 h-3.5">
-            <span>本人含む</span>
-          </label>
-        </div>
+      <div>
+        <label class="block text-[10px] font-bold text-gray-500 mb-1">最終公演地</label>
+        <input type="text" name="final_performance_location" value="{% if post_data %}{{ post_data.final_performance_location }}{% else %}{{ final_performance_location|default:'' }}{% endif %}" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2" placeholder="例: 大阪">
       </div>
-      <input type="hidden" name="request_kind" value="load_in">
     </div>
   </div>
+  {% endif %}
 
-  <!-- 人員申請（多日対応） -->
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5{% if block_key == 'rehearsal_strike' %} order-1{% endif %}">
-    <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-      <i class="fa-solid fa-users text-gray-300"></i> {{ process.title }}
-    </h3>
+  <div class="space-y-4">
+    <template x-for="(unit, idx) in units" :key="unit.client_id">
+      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <div class="w-7 h-7 rounded-full bg-indigo-50 border-2 border-indigo-200 text-indigo-600 flex items-center justify-center text-xs font-black flex-none" x-text="idx + 1"></div>
+          <div class="flex-1">
+            <div class="text-sm font-bold text-gray-900" x-text="unit.unit_type === 'transport' ? '車両便申請' : '人員申請'"></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" class="text-xs font-bold text-indigo-500 hover:text-indigo-700" @click="duplicateUnit(idx)">複製</button>
+            <button type="button" class="text-xs font-bold text-rose-500 hover:text-rose-700" @click="removeUnit(idx)" x-show="units.length > 1">削除</button>
+          </div>
+        </div>
 
-    <div class="space-y-3">
-      <template x-for="(day, idx) in days" :key="idx">
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <!-- 日付ヘッダー -->
-          <div class="px-4 py-3 bg-gray-50 border-b border-gray-100 space-y-2">
-            {% if block_key == 'theatre_setup' %}
-            <div class="flex gap-1.5">
-              {% for val, label in setup_label_choices %}
-              <label :class="day.setup_label === '{{ val }}'
-                              ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                              : 'border-gray-200 text-gray-400 hover:border-gray-300'"
-                     class="flex-1 flex items-center justify-center py-1.5 px-2 rounded-lg border-2
-                            cursor-pointer text-[10px] font-bold transition-all">
-                <input type="radio" :name="'setup_label_' + idx" value="{{ val }}"
-                       :checked="day.setup_label === '{{ val }}'"
-                       @change="day.setup_label = '{{ val }}'"
-                       class="sr-only">
-                {{ label }}
-              </label>
-              {% endfor %}
-            </div>
-            {% endif %}
+        <div class="p-4 space-y-4">
+          <div :class="unit.unit_type === 'transport' ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 gap-3 sm:grid-cols-3'">
             <div>
-              <label class="block text-[10px] font-bold text-gray-500 mb-1">
-                {% if block_key == 'rehearsal_setup' %}稽古場仕込み日{% elif block_key == 'rehearsal_strike' %}稽古場バラシ日{% elif block_key == 'theatre_setup' %}劇場仕込み日{% elif block_key == 'theatre_strike' %}劇場バラシ日{% elif block_key == 'travel_load' %}旅荷積み日{% elif block_key == 'travel_unload' %}旅荷降ろし日{% else %}実施日{% endif %}
-              </label>
-              <div class="flex items-center gap-2">
-                <i class="fa-regular fa-calendar text-gray-300 text-xs flex-none"></i>
-                <input type="date" x-model="day.date"
-                       class="form-input flex-1 rounded-lg border-gray-200 text-sm focus:ring-indigo-500 py-1.5">
-                <!-- 複製ボタン -->
-                <button type="button" @click="duplicateDay(idx)"
-                        title="この日を複製（翌日）"
-                        class="flex-none w-8 h-8 flex items-center justify-center rounded-lg text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
-                  <i class="fa-solid fa-copy text-xs"></i>
-                </button>
-                <!-- 削除ボタン（1行のみの場合は非表示） -->
-                <button type="button" @click="removeDay(idx)"
-                        x-show="days.length > 1"
-                        title="この日を削除"
-                        class="flex-none w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors">
-                  <i class="fa-solid fa-trash text-xs"></i>
-                </button>
-              </div>
+              <label class="block text-[10px] font-bold text-gray-500 mb-1">日付</label>
+              <input type="date" x-model="unit.work_date" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
             </div>
-            <div>
-              <label class="block text-[10px] font-bold text-gray-500 mb-1">
-                {% if block_key == 'rehearsal_setup' %}仕込み開始時間{% elif block_key == 'theatre_strike' %}集合時間{% elif block_key == 'rehearsal_strike' %}スタンバイ時間{% else %}開始時間{% endif %}
-              </label>
-              <input type="time" x-model="day.standby_time"
-                     @focus="if(!day.standby_time)day.standby_time='12:00'"
-                     class="form-input w-32 rounded-lg border-gray-200 text-sm focus:ring-indigo-500 py-1.5"
-                     placeholder="--:--">
+            <div x-show="unit.unit_type === 'staffing'">
+              <label class="block text-[10px] font-bold text-gray-500 mb-1">開始時間</label>
+              <input type="time" x-model="unit.start_time" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
+            </div>
+            <div x-show="unit.unit_type === 'staffing'">
+              <label class="block text-[10px] font-bold text-gray-500 mb-1">終了時間</label>
+              <input type="time" x-model="unit.end_time" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
             </div>
           </div>
-          <!-- ポジション行 -->
-          <div class="px-4 py-3 space-y-3">
-            <template x-for="pos in positionList" :key="pos.slug">
-              <div>
-                <span class="text-xs font-bold text-gray-600" x-text="pos.label"></span>
-                <div class="flex items-center gap-1.5 mt-1">
-                  <select x-model="day.positions[pos.slug].qty"
-                          class="form-select w-20 rounded-lg border-gray-200 text-sm text-center focus:ring-indigo-500 py-1.5">
-                    <option value="">-</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                    <option value="7">7</option>
-                    <option value="8">8</option>
-                    <option value="9">9</option>
+
+          <template x-if="unit.unit_type === 'transport'">
+            <div class="bg-white rounded-2xl border border-gray-100 p-4">
+              <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <i class="fa-solid fa-truck text-gray-300"></i> 車両申請: {% if block_key == 'rehearsal_strike' or block_key == 'theatre_strike' %}搬出・荷降ろし{% elif block_key == 'travel_load' %}倉庫荷出し・旅荷積み{% elif block_key == 'travel_unload' %}旅荷降ろし・倉庫荷降ろし{% else %}倉庫荷出し・搬入{% endif %}
+              </h3>
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-[10px] font-bold text-gray-500 mb-1">希望車種</label>
+                  <select x-model="unit.vehicle.requested_vehicle_id" class="form-select block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2.5">
+                    <option value="">--- 未定 ---</option>
+                    {% for v in vehicles %}
+                    <option value="{{ v.pk }}">{{ v.name }}（{{ v.get_vehicle_type_display }}）</option>
+                    {% endfor %}
                   </select>
-                  <span class="text-xs text-gray-400">人</span>
                 </div>
-                <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer mt-1">
-                  <input type="checkbox" x-model="day.positions[pos.slug].include_self"
-                         class="rounded text-indigo-600 w-3.5 h-3.5">
-                  <span>本人含む</span>
-                </label>
+                <div class="flex gap-2 items-start">
+                  <div class="flex-1 bg-gray-50 rounded-xl p-3 space-y-3">
+                    <div>
+                      <label class="block text-[10px] font-bold text-gray-500 mb-1">配車希望時間</label>
+                      <input type="time" x-model="unit.vehicle.requested_time" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
+                    </div>
+                    <div>
+                      <label class="block text-[10px] font-bold text-gray-500 mb-1">出発地</label>
+                      <input type="text" x-model="unit.vehicle.route_from" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2" placeholder="{% if block_key == 'rehearsal_strike' %}例: すみだ4St{% elif block_key == 'theatre_strike' %}例: パルコ劇場{% elif block_key == 'travel_unload' %}例: すみだ倉庫{% else %}例: 赤堤倉庫{% endif %}">
+                    </div>
+                    <div>
+                      <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_strike' or block_key == 'theatre_strike' %}搬出{% elif block_key == 'travel_unload' %}旅荷降ろし{% else %}積み込み{% endif %}</label>
+                      <div class="flex items-center gap-1.5">
+                        <select x-model="unit.vehicle.loading_qty" class="form-select w-20 rounded-xl border-gray-200 text-sm text-center focus:ring-indigo-500 py-2">
+                          <option value="">-</option>
+                          {% for n in "123456789" %}
+                          <option value="{{ forloop.counter }}" :selected="unit.vehicle.loading_qty === '{{ forloop.counter }}'">{{ forloop.counter }}</option>
+                          {% endfor %}
+                        </select>
+                        <span class="text-xs text-gray-400">人</span>
+                      </div>
+                    </div>
+                    <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                      <input type="checkbox" x-model="unit.vehicle.loading_include_self" class="rounded text-indigo-600 w-3.5 h-3.5">
+                      <span>本人含む</span>
+                    </label>
+                  </div>
+                  <div class="flex-none self-center text-gray-300">
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                  </div>
+                  <div class="flex-1 bg-gray-50 rounded-xl p-3 space-y-3">
+                    <div>
+                      <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_setup' or block_key == 'theatre_setup' or block_key == 'travel_load' %}到着希望時間{% else %}倉庫到着予想時間{% endif %}</label>
+                      <input type="time" x-model="unit.vehicle.arrival_requested_time" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
+                    </div>
+                    <div>
+                      <label class="block text-[10px] font-bold text-gray-500 mb-1">目的地</label>
+                      <input type="text" x-model="unit.vehicle.route_to" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2" placeholder="{% if block_key == 'rehearsal_strike' or block_key == 'theatre_strike' or block_key == 'travel_unload' %}例: 赤堤倉庫{% elif block_key == 'travel_load' %}例: すみだ倉庫{% else %}例: すみだ4St{% endif %}">
+                    </div>
+                    <div>
+                      <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_strike' or block_key == 'theatre_strike' %}荷降ろし{% elif block_key == 'travel_unload' %}倉庫荷降ろし{% else %}搬入{% endif %}</label>
+                      <div class="flex items-center gap-1.5">
+                        <select x-model="unit.vehicle.unloading_qty" class="form-select w-20 rounded-xl border-gray-200 text-sm text-center focus:ring-indigo-500 py-2">
+                          <option value="">-</option>
+                          {% for n in "123456789" %}
+                          <option value="{{ forloop.counter }}" :selected="unit.vehicle.unloading_qty === '{{ forloop.counter }}'">{{ forloop.counter }}</option>
+                          {% endfor %}
+                        </select>
+                        <span class="text-xs text-gray-400">人</span>
+                      </div>
+                    </div>
+                    <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                      <input type="checkbox" x-model="unit.vehicle.unloading_include_self" class="rounded text-indigo-600 w-3.5 h-3.5">
+                      <span>本人含む</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-gray-500 mb-1">便備考</label>
+                  <textarea x-model="unit.vehicle.note" rows="2" class="form-textarea block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500" placeholder="便ごとの補足があれば入力"></textarea>
+                </div>
               </div>
-            </template>
-          </div>
+            </div>
+          </template>
+
+          <template x-if="unit.unit_type === 'staffing'">
+            <div class="space-y-4">
+              {% if block_key == 'theatre_setup' %}
+              <div>
+                <div class="block text-[10px] font-bold text-gray-500 mb-1">種別</div>
+                <div class="flex gap-1.5">
+                  {% for val, label in setup_label_choices %}
+                  <label :class="unit.setup_label === '{{ val }}' ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-400 hover:border-gray-300'" class="flex-1 flex items-center justify-center py-1.5 px-2 rounded-lg border-2 cursor-pointer text-[10px] font-bold transition-all">
+                    <input type="radio" :name="'setup_label_' + idx" value="{{ val }}" :checked="unit.setup_label === '{{ val }}'" @change="unit.setup_label = '{{ val }}'" class="sr-only">
+                    {{ label }}
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+
+              <div class="bg-white rounded-2xl border border-gray-100 p-4">
+                <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <i class="fa-solid fa-users text-gray-300"></i> 人員申請
+                </h3>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <template x-for="row in unit.staff_rows" :key="row.slug">
+                    <div class="bg-gray-50 rounded-xl p-3 space-y-2">
+                      <div class="text-sm font-bold text-gray-900" x-text="row.label"></div>
+                      <div class="flex items-center gap-2">
+                        <select x-model="row.qty" class="form-select w-20 rounded-xl border-gray-200 text-sm text-center focus:ring-indigo-500 py-2">
+                          <option value="">-</option>
+                          <template x-for="n in [1,2,3,4,5,6,7,8,9]" :key="n">
+                            <option :value="String(n)" :selected="row.qty === String(n)" x-text="n"></option>
+                          </template>
+                        </select>
+                        <span class="text-xs text-gray-400">人</span>
+                      </div>
+                      <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                        <input type="checkbox" x-model="row.include_self" class="rounded text-indigo-600 w-3.5 h-3.5">
+                        <span>本人含む</span>
+                      </label>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold text-gray-500 mb-1">人員備考</label>
+                <textarea x-model="unit.note" rows="2" class="form-textarea block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500" placeholder="この日の人員補足があれば入力"></textarea>
+              </div>
+            </div>
+          </template>
         </div>
-      </template>
-    </div>
+      </div>
+    </template>
+  </div>
 
-    <!-- 日を追加ボタン -->
-    <button type="button" @click="addDay()"
-            class="mt-3 w-full border-2 border-dashed border-gray-200 rounded-2xl py-3 text-sm text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors flex items-center justify-center gap-2">
-      <i class="fa-solid fa-plus text-xs"></i>
-      <span>日を追加</span>
+  <div class="grid grid-cols-1 gap-3 {% if show_staff_add_button %}sm:grid-cols-2{% endif %}">
+    <button type="button" @click="addTransportUnit()" class="rounded-2xl border border-dashed border-sky-200 bg-sky-50/60 px-4 py-3 text-sm font-bold text-sky-700 hover:bg-sky-50">
+      <i class="fa-solid fa-truck mr-1"></i>車両便を追加
     </button>
+    {% if show_staff_add_button %}
+    <button type="button" @click="addStaffUnit()" class="rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/60 px-4 py-3 text-sm font-bold text-indigo-600 hover:bg-indigo-50">
+      <i class="fa-solid fa-users mr-1"></i>人員申請を追加
+    </button>
+    {% endif %}
   </div>
-
-  <!-- 備考 -->
-  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5{% if block_key == 'rehearsal_strike' %} order-3{% endif %}">
-    <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-      <i class="fa-solid fa-comment text-gray-300"></i> 備考
-    </h3>
-    <textarea name="note" rows="3"
-              class="form-textarea block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500"
-              placeholder="備考があれば入力">{{ process.note|default:'' }}</textarea>
-  </div>
-
 </div>
 {% endif %}

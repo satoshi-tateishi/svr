@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
 from django.db import models
+from django.db.models import Max, Min
 
 # =========================
 # 公演
@@ -36,27 +37,31 @@ class Production(models.Model):
 
     @property
     def actual_start_date(self):
-        """表示用開始日。ProcessDay がある場合はその最小日付、なければ start_date を返す。"""
+        """表示用開始日。申請単位日付を優先し、なければ ProcessDay / start_date を返す。"""
         # ProductionListView で annotate された値を優先（N+1 防止）
         process_min = getattr(self, 'process_min_date', None)
         if process_min is None:
-            from django.db.models import Min
-
-            process_min = ProcessDay.objects.filter(process__production=self).aggregate(
-                Min('date')
-            )['date__min']
+            process_min = ProcessRequestUnit.objects.filter(process__production=self).aggregate(
+                Min('work_date')
+            )['work_date__min']
+            if process_min is None:
+                process_min = ProcessDay.objects.filter(process__production=self).aggregate(
+                    Min('date')
+                )['date__min']
         return process_min or self.start_date
 
     @property
     def actual_end_date(self):
-        """表示用終了日。ProcessDay がある場合はその最大日付、なければ end_date を返す。"""
+        """表示用終了日。申請単位日付を優先し、なければ ProcessDay / end_date を返す。"""
         process_max = getattr(self, 'process_max_date', None)
         if process_max is None:
-            from django.db.models import Max
-
-            process_max = ProcessDay.objects.filter(process__production=self).aggregate(
-                Max('date')
-            )['date__max']
+            process_max = ProcessRequestUnit.objects.filter(process__production=self).aggregate(
+                Max('work_date')
+            )['work_date__max']
+            if process_max is None:
+                process_max = ProcessDay.objects.filter(process__production=self).aggregate(
+                    Max('date')
+                )['date__max']
         return process_max or self.end_date
 
 
@@ -140,6 +145,12 @@ class Position(models.Model):
 # 工程・申請
 # =========================
 
+PROCESS_SETUP_LABEL_CHOICES = [
+    ('setup_staff', '仕込み人数'),
+    ('stage_rehearsal', '舞台稽古'),
+    ('opening_night', '初日'),
+]
+
 
 class ProductionTemplate(models.Model):
     """工程構成のテンプレートプリセット"""
@@ -181,9 +192,19 @@ class Process(models.Model):
         help_text='テンプレート定義のキー（rehearsal_setup等）',
     )
     order = models.PositiveIntegerField(default=0, verbose_name='表示順')
-    note = models.TextField(blank=True, verbose_name='備考')
     sumida_required = models.BooleanField(null=True, blank=True, verbose_name='すみだ便必要')
     assistant_required = models.BooleanField(null=True, blank=True, verbose_name='助っ人必要')
+    final_performance_load_out_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='最終公演地搬出日',
+    )
+    final_performance_location = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        verbose_name='最終公演地',
+    )
 
     class Meta:
         verbose_name = '工程ブロック'
@@ -196,14 +217,58 @@ class Process(models.Model):
         return f'{self.production.title} - {self.title}'
 
 
+class ProcessRequestUnit(models.Model):
+    """工程ブロック内の申請単位"""
+
+    class UnitType(models.TextChoices):
+        TRANSPORT = 'transport', '車両便申請'
+        STAFFING = 'staffing', '人員申請'
+
+    process = models.ForeignKey(
+        Process, on_delete=models.CASCADE, related_name='request_units', verbose_name='工程ブロック'
+    )
+    # 第1段階では既存の BLOCK_PROCESS_TYPE_MAP / ProcessType 前提との整合維持のため保持する。
+    process_type = models.ForeignKey(ProcessType, on_delete=models.PROTECT, verbose_name='工程種別')
+    unit_type = models.CharField(
+        max_length=20,
+        choices=UnitType.choices,
+        default=UnitType.STAFFING,
+        verbose_name='申請単位種別',
+    )
+    order = models.PositiveIntegerField(default=0, verbose_name='表示順')
+    work_date = models.DateField(null=True, blank=True, verbose_name='実施日')
+    location = models.CharField(max_length=200, blank=True, default='', verbose_name='場所')
+    start_time = models.TimeField(null=True, blank=True, verbose_name='開始時間')
+    end_time = models.TimeField(null=True, blank=True, verbose_name='終了時間')
+    note = models.TextField(blank=True, verbose_name='申請単位備考')
+    setup_label = models.CharField(
+        max_length=20,
+        choices=PROCESS_SETUP_LABEL_CHOICES,
+        blank=True,
+        default='',
+        verbose_name='劇場仕込みラベル',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新日時')
+
+    class Meta:
+        verbose_name = '申請単位'
+        verbose_name_plural = '申請単位'
+        ordering = ['work_date', 'order', 'start_time', 'id']
+        indexes = [
+            models.Index(fields=['process', 'work_date']),
+            models.Index(fields=['process', 'order']),
+        ]
+
+    def __str__(self):
+        date_str = self.work_date.isoformat() if self.work_date else '未定'
+        return f'{date_str} {self.process.title}'
+
+
 class ProcessDay(models.Model):
     """個別の工程（タスク単位）"""
 
-    SETUP_LABEL_CHOICES = [
-        ('setup_staff', '仕込み人数'),
-        ('stage_rehearsal', '舞台稽古'),
-        ('opening_night', '初日'),
-    ]
+    SETUP_LABEL_CHOICES = PROCESS_SETUP_LABEL_CHOICES
 
     process = models.ForeignKey(
         Process, on_delete=models.CASCADE, related_name='days', verbose_name='工程ブロック'
@@ -261,8 +326,18 @@ class StaffRequest(models.Model):
     process_day = models.ForeignKey(
         ProcessDay,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='staff_requests',
         verbose_name='工程タスク',
+    )
+    process_request_unit = models.ForeignKey(
+        ProcessRequestUnit,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='staff_requests',
+        verbose_name='申請単位',
     )
     position = models.ForeignKey(Position, on_delete=models.PROTECT, verbose_name='ポジション')
 
@@ -299,12 +374,24 @@ class VehicleRequest(models.Model):
     process_day = models.ForeignKey(
         ProcessDay,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='vehicle_requests',
         verbose_name='工程タスク',
+    )
+    process_request_unit = models.OneToOneField(
+        ProcessRequestUnit,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='vehicle_request',
+        verbose_name='申請単位',
     )
     requested_vehicle = models.ForeignKey(
         'performances.Vehicle',
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name='production_vehicle_requests',
         verbose_name='申請車両',
     )
@@ -336,10 +423,16 @@ class VehicleRequest(models.Model):
     @property
     def effective_date(self):
         """配車日。date フィールドが設定されていればそちらを優先する。"""
-        return self.date or (self.process_day.date if self.process_day_id else None)
+        if self.date:
+            return self.date
+        if self.process_request_unit_id:
+            return self.process_request_unit.work_date
+        if self.process_day_id:
+            return self.process_day.date
+        return None
 
     def __str__(self):
-        return self.requested_vehicle.name
+        return self.requested_vehicle.name if self.requested_vehicle else '未定車両'
 
 
 class VehicleAssignment(models.Model):
@@ -377,7 +470,10 @@ class VehicleAssignment(models.Model):
     class Meta:
         verbose_name = '車両手配'
         verbose_name_plural = '車両手配一覧'
-        ordering = ['vehicle_request__process_day__date', 'vehicle_request__requested_time']
+        ordering = [
+            'vehicle_request__process_request_unit__work_date',
+            'vehicle_request__requested_time',
+        ]
 
     def __str__(self):
         return f'{self.vehicle_request} - {self.get_status_display()}'

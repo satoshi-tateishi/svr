@@ -1,6 +1,5 @@
 import json
 from datetime import date, datetime
-from datetime import time as dt_time
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -24,6 +23,7 @@ from .models import (
     Position,
     Process,
     ProcessDay,
+    ProcessRequestUnit,
     ProcessType,
     Production,
     ProductionMember,
@@ -38,6 +38,34 @@ from .templates import (
     SETUP_BLOCKS,
 )
 
+TRAVEL_BLOCK_KEYS = {'travel_load', 'travel_unload'}
+
+
+def _has_staff_rows(rows):
+    return any(str(row.get('qty') or '').strip() for row in rows or [])
+
+
+def _build_staff_rows(block_key, staff_requests):
+    position_map = BLOCK_POSITION_MAP.get(block_key, {})
+    staff_by_slug = {sr.position.slug: sr for sr in staff_requests}
+    rows = []
+    for slug, label in position_map.items():
+        staff_request = staff_by_slug.get(slug)
+        if not staff_request:
+            continue
+        rows.append(
+            {
+                'label': (
+                    staff_request.process_request_unit.get_setup_label_display()
+                    if block_key == 'theatre_setup' and slug == 'setup-crew'
+                    else label
+                ),
+                'qty': staff_request.quantity,
+                'include_self': staff_request.include_self,
+            }
+        )
+    return rows
+
 
 def _build_process_blocks(processes_qs):
     """工程ブロック表示用データ構造を構築する。
@@ -48,63 +76,38 @@ def _build_process_blocks(processes_qs):
     将来: BLOCK_POSITION_MAP は apps/productions/templates.py にあるが、
     責務としては constants / definitions モジュールへ寄せる余地がある。
     """
-    # 循環 import 回避のため local import（将来 constants 化の際に整理）
-    from .templates import BLOCK_POSITION_MAP  # noqa: PLC0415
-
     result = []
     for proc in processes_qs:
         block_key = proc.block_key
-        position_map = BLOCK_POSITION_MAP.get(block_key, {})
-
-        # 【拡張性注記】vehicle_requests は "全件" 収集する。
-        # 現状の block_edit フォームは1件編集前提（暫定）だが、
-        # 将来的に複数車両申請ブロックを追加できるよう、表示層は常にリストで扱う。
-        vehicles: list = []
-        day_entries = []
-
-        for day in sorted(proc.days.all(), key=lambda d: (d.date or date.max, d.order)):
-            staff_by_slug = {sr.position.slug: sr for sr in day.staff_requests.all()}
-            staff_rows = [
-                {
-                    'label': (
-                        day.get_setup_label_display()
-                        if block_key == 'theatre_setup' and slug == 'setup-crew'
-                        else label
-                    ),
-                    'qty': staff_by_slug[slug].quantity,
-                    'include_self': staff_by_slug[slug].include_self,
-                }
-                for slug, label in position_map.items()
-                if slug in staff_by_slug
-            ]
-            day_entries.append(
-                {
-                    'date': day.date,
-                    'standby_time': day.start_time,
-                    'staff_rows': staff_rows,
-                    'setup_label': day.setup_label,
-                    'setup_label_display': day.get_setup_label_display(),
-                }
-            )
-            vehicles.extend(list(day.vehicle_requests.all()))
-
-        # 表示順を安定化: 配車日 → 配車希望時間 → pk
-        vehicles.sort(
-            key=lambda v: (
-                v.effective_date or date.max,
-                v.requested_time or dt_time.max,
-                v.pk,
-            )
+        has_final_performance = bool(
+            block_key == 'travel_unload'
+            and (proc.final_performance_load_out_date or proc.final_performance_location)
         )
+        units = []
+        for unit in proc.request_units.all():
+            vehicle_request = getattr(unit, 'vehicle_request', None)
+            staff_requests = list(unit.staff_requests.all())
+            units.append(
+                {
+                    'unit': unit,
+                    'unit_type': unit.unit_type,
+                    'work_date': unit.work_date,
+                    'start_time': unit.start_time,
+                    'end_time': unit.end_time,
+                    'note': unit.note,
+                    'setup_label': unit.setup_label,
+                    'setup_label_display': unit.get_setup_label_display(),
+                    'vehicle_request': vehicle_request,
+                    'staff_rows': _build_staff_rows(block_key, staff_requests),
+                }
+            )
 
         result.append(
             {
                 'process': proc,
                 'block_key': block_key,
-                'days': day_entries,
-                # 【暫定】block_edit フォームは vehicle 1件前提。複数件ある場合も全件表示する。
-                # 将来: 車両申請専用ブロックが追加されたとき vehicles リスト全件を活用する。
-                'vehicles': vehicles,
+                'units': units,
+                'has_final_performance': has_final_performance,
             }
         )
     return result
@@ -565,9 +568,12 @@ class ProductionListView(LoginRequiredMixin, ListView):
         )
         return (
             Production.objects.annotate(
-                process_min_date=Min('processes__days__date'),
-                process_max_date=Max('processes__days__date'),
-                # ソート用: ProcessDay がある場合はその最小日付、なければ start_date
+                request_unit_min_date=Min('processes__request_units__work_date'),
+                legacy_process_min_date=Min('processes__days__date'),
+                request_unit_max_date=Max('processes__request_units__work_date'),
+                legacy_process_max_date=Max('processes__days__date'),
+                process_min_date=Coalesce('request_unit_min_date', 'legacy_process_min_date'),
+                process_max_date=Coalesce('request_unit_max_date', 'legacy_process_max_date'),
                 effective_start_date=Coalesce('process_min_date', 'start_date'),
             )
             .select_related('created_by', 'created_by__profile')
@@ -668,16 +674,16 @@ class ProductionDetailView(LoginRequiredMixin, DetailView):
         # days__process_type は互換性のため残す（ブロック概要カードから将来削除予定）
         processes_qs = list(
             self.object.processes.prefetch_related(
-                'days',
-                'days__process_type',
-                'days__staff_requests__position',
-                'days__vehicle_requests__requested_vehicle',
+                'request_units',
+                'request_units__process_type',
+                'request_units__staff_requests__position',
+                'request_units__vehicle_request__requested_vehicle',
             ).order_by('order')
         )
 
         # process_min/max_date を注入（actual_start/end_date の追加 DB クエリを防ぐ）
-        all_dated = [d for proc in processes_qs for d in proc.days.all() if d.date]
-        dates = [d.date for d in all_dated]
+        all_dated = [u for proc in processes_qs for u in proc.request_units.all() if u.work_date]
+        dates = [u.work_date for u in all_dated]
         self.object.process_min_date = min(dates) if dates else None
         self.object.process_max_date = max(dates) if dates else None
 
@@ -701,9 +707,9 @@ class ProductionProcessesPartialView(LoginRequiredMixin, View):
         production = get_object_or_404(Production, pk=pk)
         processes_qs = list(
             production.processes.prefetch_related(
-                'days',
-                'days__staff_requests__position',
-                'days__vehicle_requests__requested_vehicle',
+                'request_units',
+                'request_units__staff_requests__position',
+                'request_units__vehicle_request__requested_vehicle',
             ).order_by('order')
         )
         return render(
@@ -1176,10 +1182,10 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
     def get(self, request, process_pk):
         process = get_object_or_404(
             Process.objects.select_related('production').prefetch_related(
-                'days',
-                'days__process_type',
-                'days__staff_requests__position',
-                'days__vehicle_requests__requested_vehicle',
+                'request_units',
+                'request_units__process_type',
+                'request_units__staff_requests__position',
+                'request_units__vehicle_request__requested_vehicle',
             ),
             pk=process_pk,
         )
@@ -1232,43 +1238,146 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
     def _build_context(self, process):
         block_key = process.block_key
         vehicles = Vehicle.objects.filter(is_active=True).order_by('order', 'name')
-        days = list(
-            process.days.prefetch_related(
-                'staff_requests__position',
-                'vehicle_requests__requested_vehicle',
-            ).order_by('date', 'order')
-        )
 
         position_map = BLOCK_POSITION_MAP.get(block_key, {})
         position_list = [{'slug': slug, 'label': label} for slug, label in position_map.items()]
-        if block_key == 'rehearsal_strike':
+        if block_key in ('rehearsal_strike', 'theatre_strike'):
             position_list = [p for p in position_list if p['slug'] not in ('loading', 'unloading')]
 
-        days_data = []
-        existing_vehicle = None
-        existing_staff_helper = None
-        for d in days:
-            staff_by_slug = {sr.position.slug: sr for sr in d.staff_requests.all()}
-            days_data.append(
-                {
-                    'date': d.date.isoformat() if d.date else '',
-                    'standby_time': d.start_time.strftime('%H:%M') if d.start_time else '',
-                    'setup_label': d.setup_label or 'setup_staff',
-                    'positions': {
-                        s: {
-                            'qty': staff_by_slug[s].quantity if s in staff_by_slug else '',
-                            'include_self': (
-                                staff_by_slug[s].include_self
-                                if s in staff_by_slug
-                                else (block_key == 'theatre_setup' and s == 'setup-crew')
-                            ),
+        request_units = list(
+            process.request_units.prefetch_related(
+                'staff_requests__position',
+                'vehicle_request__requested_vehicle',
+            ).order_by('work_date', 'order', 'start_time', 'id')
+        )
+        if not request_units:
+            request_units = []
+            for d in process.days.prefetch_related(
+                'staff_requests__position',
+                'vehicle_requests__requested_vehicle',
+            ).order_by('date', 'order'):
+                if d.vehicle_requests.exists() or block_key in TRAVEL_BLOCK_KEYS:
+                    request_units.append(
+                        {
+                            'legacy_day': d,
+                            'legacy_unit_type': ProcessRequestUnit.UnitType.TRANSPORT,
+                            'vehicle_request': d.vehicle_requests.first(),
+                            'staff_requests': [],
                         }
-                        for s in position_map
+                    )
+                if d.staff_requests.exists() and block_key not in TRAVEL_BLOCK_KEYS:
+                    request_units.append(
+                        {
+                            'legacy_day': d,
+                            'legacy_unit_type': ProcessRequestUnit.UnitType.STAFFING,
+                            'vehicle_request': None,
+                            'staff_requests': list(d.staff_requests.all()),
+                        }
+                    )
+        request_units_data = []
+        existing_staff_helper = None
+        for idx, item in enumerate(request_units):
+            if isinstance(item, dict):
+                legacy_day = item['legacy_day']
+                unit = None
+                unit_type = item['legacy_unit_type']
+                vehicle_request = item['vehicle_request']
+                staff_requests = item['staff_requests']
+                work_date = legacy_day.date
+                start_time = legacy_day.start_time
+                end_time = legacy_day.end_time
+                note = legacy_day.note
+                setup_label = legacy_day.setup_label
+            else:
+                unit = item
+                unit_type = unit.unit_type
+                vehicle_request = getattr(unit, 'vehicle_request', None)
+                staff_requests = list(unit.staff_requests.all())
+                work_date = unit.work_date
+                start_time = unit.start_time
+                end_time = unit.end_time
+                note = unit.note
+                setup_label = unit.setup_label
+
+            staff_by_slug = {sr.position.slug: sr for sr in staff_requests}
+            request_units_data.append(
+                {
+                    'id': unit.pk if unit else '',
+                    'order': idx,
+                    'unit_type': unit_type,
+                    'work_date': work_date.isoformat() if work_date else '',
+                    'start_time': start_time.strftime('%H:%M') if start_time else '',
+                    'end_time': end_time.strftime('%H:%M') if end_time else '',
+                    'note': note or '',
+                    'setup_label': (
+                        (setup_label or 'setup_staff')
+                        if unit_type == ProcessRequestUnit.UnitType.STAFFING
+                        else ''
+                    ),
+                    'vehicle': {
+                        'requested_vehicle_id': (
+                            str(vehicle_request.requested_vehicle_id or '')
+                            if vehicle_request
+                            else ''
+                        ),
+                        'request_kind': (
+                            vehicle_request.request_kind
+                            if vehicle_request
+                            else VehicleRequest.RequestKind.LOAD_IN
+                        ),
+                        'requested_time': (
+                            vehicle_request.requested_time.strftime('%H:%M')
+                            if vehicle_request and vehicle_request.requested_time
+                            else ''
+                        ),
+                        'arrival_requested_time': (
+                            vehicle_request.arrival_requested_time.strftime('%H:%M')
+                            if vehicle_request and vehicle_request.arrival_requested_time
+                            else ''
+                        ),
+                        'route_from': vehicle_request.route_from if vehicle_request else '',
+                        'route_to': vehicle_request.route_to if vehicle_request else '',
+                        'note': vehicle_request.note if vehicle_request else '',
+                        'loading_qty': (
+                            str(vehicle_request.loading_qty)
+                            if vehicle_request and vehicle_request.loading_qty is not None
+                            else ''
+                        ),
+                        'loading_include_self': (
+                            vehicle_request.loading_include_self if vehicle_request else True
+                        ),
+                        'unloading_qty': (
+                            str(vehicle_request.unloading_qty)
+                            if vehicle_request and vehicle_request.unloading_qty is not None
+                            else ''
+                        ),
+                        'unloading_include_self': (
+                            vehicle_request.unloading_include_self if vehicle_request else True
+                        ),
                     },
+                    'staff_rows': (
+                        [
+                            {
+                                'slug': pos['slug'],
+                                'label': pos['label'],
+                                'qty': (
+                                    str(staff_by_slug[pos['slug']].quantity)
+                                    if pos['slug'] in staff_by_slug
+                                    else ''
+                                ),
+                                'include_self': (
+                                    staff_by_slug[pos['slug']].include_self
+                                    if pos['slug'] in staff_by_slug
+                                    else True
+                                ),
+                            }
+                            for pos in position_list
+                        ]
+                        if unit_type == ProcessRequestUnit.UnitType.STAFFING
+                        else []
+                    ),
                 }
             )
-            if not existing_vehicle:
-                existing_vehicle = d.vehicle_requests.first()
             if not existing_staff_helper:
                 existing_staff_helper = staff_by_slug.get('helper')
 
@@ -1277,12 +1386,14 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
             'production': process.production,
             'block_key': block_key,
             'vehicles': vehicles,
-            'days_data': days_data,
+            'request_units_data': request_units_data,
             'position_list': position_list,
-            'existing_vehicle': existing_vehicle,
             'existing_staff_helper': existing_staff_helper,
             'position_rows': [],  # kizai_standby との互換性のため残す
             'setup_label_choices': ProcessDay.SETUP_LABEL_CHOICES,
+            'final_performance_load_out_date': process.final_performance_load_out_date,
+            'final_performance_location': process.final_performance_location,
+            'show_staff_add_button': block_key not in TRAVEL_BLOCK_KEYS,
         }
 
     # ─── 保存ロジック ────────────────────────────────────────────────
@@ -1290,14 +1401,12 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
     def _save_sumida_check(self, request, process):
         sumida = request.POST.get('sumida_required') == '1'
         process.sumida_required = sumida
-        process.note = request.POST.get('note', '').strip()
-        process.save(update_fields=['sumida_required', 'note'])
+        process.save(update_fields=['sumida_required'])
 
     def _save_kizai_standby(self, request, process):
         assistant = request.POST.get('assistant_required') == '1'
         process.assistant_required = assistant
-        process.note = request.POST.get('note', '').strip()
-        process.save(update_fields=['assistant_required', 'note'])
+        process.save(update_fields=['assistant_required'])
 
         if assistant:
             qty_str = request.POST.get('helper_quantity', '1').strip()
@@ -1338,6 +1447,8 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
     def _save_single_day_block(self, request, process):
         """single_day モードのブロック（仕込み・バラシ・旅荷積み等）を保存する"""
         block_key = process.block_key
+        final_performance_load_out_date = None
+        final_performance_location = ''
 
         # ProcessType 取得
         pt_slug = BLOCK_PROCESS_TYPE_MAP.get(block_key)
@@ -1346,130 +1457,166 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
         pt = ProcessType.objects.filter(slug=pt_slug).first()
         if not pt:
             raise ValueError(f'工程タイプ "{pt_slug}" がデータベースに存在しません。')
-
-        # ── 人員申請（多日 JSON）────────────────────────────────────────
-        staff_days_raw = request.POST.get('staff_days_json', '[]').strip()
-        try:
-            staff_days = json.loads(staff_days_raw)
-        except (ValueError, TypeError):
-            staff_days = []
-
-        valid_days = [d for d in staff_days if isinstance(d, dict) and d.get('date')]
-        if not valid_days:
-            raise ValueError('日付を1件以上入力してください。')
-
-        # 全 ProcessDay を削除して再作成（VehicleRequest は後でフォームから再作成する）
-        process.days.all().delete()
-
-        first_day = None
-        for idx, day_data in enumerate(valid_days):
+        if block_key == 'travel_unload':
+            final_performance_load_out_date_str = request.POST.get(
+                'final_performance_load_out_date', ''
+            ).strip()
+            final_performance_location = request.POST.get('final_performance_location', '').strip()
+            if not final_performance_load_out_date_str:
+                raise ValueError('最終公演地搬出日を入力してください。')
+            if not final_performance_location:
+                raise ValueError('最終公演地を入力してください。')
             try:
-                block_date = datetime.strptime(day_data['date'], '%Y-%m-%d').date()
-            except (ValueError, KeyError):
-                continue
+                final_performance_load_out_date = datetime.strptime(
+                    final_performance_load_out_date_str, '%Y-%m-%d'
+                ).date()
+            except ValueError as exc:
+                raise ValueError('最終公演地搬出日の形式が不正です。') from exc
+        request_units_raw = request.POST.get('request_units_json', '[]').strip()
+        try:
+            submitted_units = json.loads(request_units_raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError('申請単位データの形式が不正です。') from exc
 
-            standby_str = (day_data.get('standby_time') or '').strip()
-            standby_time = None
-            if standby_str:
+        valid_units = [
+            unit for unit in submitted_units if isinstance(unit, dict) and unit.get('work_date')
+        ]
+        if not valid_units:
+            raise ValueError('申請単位を1件以上入力してください。')
+
+        position_slugs = list(BLOCK_POSITION_MAP.get(block_key, {}).keys())
+        position_map = {
+            position.slug: position for position in Position.objects.filter(slug__in=position_slugs)
+        }
+
+        process.request_units.all().delete()
+
+        for idx, unit_data in enumerate(valid_units):
+            unit_type = unit_data.get('unit_type') or ProcessRequestUnit.UnitType.STAFFING
+            if unit_type not in ProcessRequestUnit.UnitType.values:
+                raise ValueError('申請単位種別の値が不正です。')
+            if (
+                block_key in TRAVEL_BLOCK_KEYS
+                and unit_type != ProcessRequestUnit.UnitType.TRANSPORT
+            ):
+                raise ValueError('この工程では人員申請を追加できません。')
+            work_date_str = (unit_data.get('work_date') or '').strip()
+            if not work_date_str:
+                raise ValueError('日付を入力してください。')
+            try:
+                work_date = datetime.strptime(work_date_str, '%Y-%m-%d').date()
+            except ValueError as exc:
+                raise ValueError('日付の形式が不正です。') from exc
+
+            def parse_time(raw_value):
+                raw_value = (raw_value or '').strip()
+                if not raw_value:
+                    return None
                 try:
-                    standby_time = datetime.strptime(standby_str, '%H:%M').time()
-                except ValueError:
-                    pass
+                    return datetime.strptime(raw_value, '%H:%M').time()
+                except ValueError as exc:
+                    raise ValueError('時間の形式が不正です。') from exc
 
-            day_setup_label = (
-                day_data.get('setup_label', '') if block_key == 'theatre_setup' else ''
+            start_time = (
+                None
+                if unit_type == ProcessRequestUnit.UnitType.TRANSPORT
+                else parse_time(unit_data.get('start_time'))
             )
-            pd = ProcessDay.objects.create(
+            end_time = (
+                None
+                if unit_type == ProcessRequestUnit.UnitType.TRANSPORT
+                else parse_time(unit_data.get('end_time'))
+            )
+            setup_label = (
+                (unit_data.get('setup_label') or '').strip()
+                if block_key == 'theatre_setup'
+                and unit_type == ProcessRequestUnit.UnitType.STAFFING
+                else ''
+            )
+            unit_note = (
+                (unit_data.get('note') or '').strip()
+                if unit_type == ProcessRequestUnit.UnitType.STAFFING
+                else ''
+            )
+            request_unit = ProcessRequestUnit.objects.create(
                 process=process,
                 process_type=pt,
-                date=block_date,
-                start_time=standby_time,
+                unit_type=unit_type,
                 order=idx,
-                setup_label=day_setup_label,
+                work_date=work_date,
+                start_time=start_time,
+                end_time=end_time,
+                note=unit_note,
+                setup_label=setup_label,
             )
-            if first_day is None:
-                first_day = pd
 
-            positions_data = day_data.get('positions', {})
-            for pos_slug, pos_data in positions_data.items():
-                qty_raw = pos_data.get('qty', '')
-                if qty_raw == '' or qty_raw is None:
-                    continue
-                try:
-                    qty = max(1, int(qty_raw))
-                except (ValueError, TypeError):
-                    continue
-                position = Position.objects.filter(slug=pos_slug).first()
-                if not position:
-                    continue
-                StaffRequest.objects.create(
-                    process_day=pd,
-                    position=position,
-                    quantity=qty,
-                    include_self=bool(pos_data.get('include_self', False)),
+            if unit_type == ProcessRequestUnit.UnitType.TRANSPORT:
+                vehicle_data = unit_data.get('vehicle') or {}
+                requested_vehicle = None
+                requested_vehicle_id = (vehicle_data.get('requested_vehicle_id') or '').strip()
+                if requested_vehicle_id:
+                    try:
+                        requested_vehicle = Vehicle.objects.get(pk=int(requested_vehicle_id))
+                    except (Vehicle.DoesNotExist, ValueError) as exc:
+                        raise ValueError('希望車種の値が不正です。') from exc
+
+                def parse_non_negative_int(raw_value):
+                    raw_value = '' if raw_value is None else str(raw_value).strip()
+                    if not raw_value:
+                        return None
+                    try:
+                        return max(0, int(raw_value))
+                    except ValueError as exc:
+                        raise ValueError('人数の形式が不正です。') from exc
+
+                vehicle_requested_time = parse_time(vehicle_data.get('requested_time'))
+                arrival_requested_time = parse_time(vehicle_data.get('arrival_requested_time'))
+                loading_qty = parse_non_negative_int(vehicle_data.get('loading_qty'))
+                unloading_qty = parse_non_negative_int(vehicle_data.get('unloading_qty'))
+                VehicleRequest.objects.create(
+                    process_day=None,
+                    process_request_unit=request_unit,
+                    requested_vehicle=requested_vehicle,
+                    request_kind=vehicle_data.get('request_kind')
+                    or VehicleRequest.RequestKind.LOAD_IN,
+                    requested_time=vehicle_requested_time,
+                    arrival_requested_time=arrival_requested_time,
+                    route_from=(vehicle_data.get('route_from') or '').strip(),
+                    route_to=(vehicle_data.get('route_to') or '').strip(),
+                    note=(vehicle_data.get('note') or '').strip(),
+                    loading_qty=loading_qty,
+                    loading_include_self=bool(vehicle_data.get('loading_include_self', False)),
+                    unloading_qty=unloading_qty,
+                    unloading_include_self=bool(vehicle_data.get('unloading_include_self', False)),
                 )
-
-        if first_day is None:
-            raise ValueError('有効な日付が1件もありませんでした。')
-
-        # ── 車両申請 ────────────────────────────────────────────────────
-        vehicle_id_str = request.POST.get('vehicle_id', '').strip()
-        vehicle = None
-        if vehicle_id_str:
-            try:
-                vehicle = Vehicle.objects.get(pk=int(vehicle_id_str))
-            except (Vehicle.DoesNotExist, ValueError):
-                pass
-
-        vehicle_date_str = request.POST.get('vehicle_date', '').strip()
-        # 配車日が未入力の場合は車両申請なしとして扱う
-        if vehicle and vehicle_date_str:
-            req_time_str = request.POST.get('requested_time', '').strip()
-            arr_time_str = request.POST.get('arrival_requested_time', '').strip()
-            route_from = request.POST.get('route_from', '').strip()
-            route_to = request.POST.get('route_to', '').strip()
-            req_kind = request.POST.get('request_kind', VehicleRequest.RequestKind.LOAD_IN)
-            # 荷役人数（車両申請がある場合のみ保存）
-            loading_qty_str = request.POST.get('loading_qty', '').strip()
-            unloading_qty_str = request.POST.get('unloading_qty', '').strip()
-            loading_include_self = request.POST.get('loading_include_self') == '1'
-            unloading_include_self = request.POST.get('unloading_include_self') == '1'
-
-            req_time = arr_time = vehicle_date = None
-            loading_qty = unloading_qty = None
-            try:
-                if req_time_str:
-                    req_time = datetime.strptime(req_time_str, '%H:%M').time()
-                if arr_time_str:
-                    arr_time = datetime.strptime(arr_time_str, '%H:%M').time()
-                vehicle_date = datetime.strptime(vehicle_date_str, '%Y-%m-%d').date()
-                if loading_qty_str:
-                    loading_qty = max(0, int(loading_qty_str))
-                if unloading_qty_str:
-                    unloading_qty = max(0, int(unloading_qty_str))
-            except ValueError:
-                pass
-
-            VehicleRequest.objects.create(
-                process_day=first_day,
-                requested_vehicle=vehicle,
-                request_kind=req_kind,
-                date=vehicle_date,
-                requested_time=req_time,
-                arrival_requested_time=arr_time,
-                route_from=route_from,
-                route_to=route_to,
-                loading_qty=loading_qty,
-                loading_include_self=loading_include_self,
-                unloading_qty=unloading_qty,
-                unloading_include_self=unloading_include_self,
-            )
-
-        # 備考をブロック（Process）に保存
-        note = request.POST.get('note', '').strip()
-        if note != process.note:
-            process.note = note
-            process.save(update_fields=['note'])
+            else:
+                for row in unit_data.get('staff_rows') or []:
+                    slug = row.get('slug')
+                    position = position_map.get(slug)
+                    qty_raw = '' if row.get('qty') is None else str(row.get('qty')).strip()
+                    if not position or not qty_raw:
+                        continue
+                    try:
+                        qty = max(1, int(qty_raw))
+                    except ValueError as exc:
+                        raise ValueError('人員数の形式が不正です。') from exc
+                    StaffRequest.objects.create(
+                        process_day=None,
+                        process_request_unit=request_unit,
+                        position=position,
+                        quantity=qty,
+                        include_self=bool(row.get('include_self', False)),
+                    )
+        if block_key == 'travel_unload':
+            update_fields = []
+            if process.final_performance_load_out_date != final_performance_load_out_date:
+                process.final_performance_load_out_date = final_performance_load_out_date
+                update_fields.append('final_performance_load_out_date')
+            if process.final_performance_location != final_performance_location:
+                process.final_performance_location = final_performance_location
+                update_fields.append('final_performance_location')
+            if update_fields:
+                process.save(update_fields=update_fields)
 
 
 class ProcessBlockDeleteView(ProcessEditPermissionMixin, LoginRequiredMixin, View):

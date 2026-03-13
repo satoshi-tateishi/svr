@@ -18,7 +18,7 @@
       <label class="block text-xs font-bold text-gray-500 uppercase mb-1">公演タイトル <span class="text-red-500">*</span></label>
       <input type="text" name="title" value="{{ form.title.value|default:'' }}"
              class="form-input block w-full rounded-lg border-gray-200 focus:ring-indigo-500 focus:border-indigo-500"
-             placeholder="公演名を入力（例: 砂の女）">
+             placeholder="公演名を入力（例: ハムレット）">
       {% if form.title.errors %}
         <p class="mt-1 text-xs text-red-600">{{ form.title.errors.0 }}</p>
       {% endif %}

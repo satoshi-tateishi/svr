@@ -17,13 +17,6 @@
         {% include "productions/partials/process_block_display.html" %}
       {% endfor %}
     </div>
-    {# 将来: production_detail 主画面から直接ブロック追加できる UI（HTMX モーダル等）に置き換え予定 #}
-    <div class="mt-3 text-center">
-      <a href="{% url 'productions:setup' production.pk %}"
-         class="text-xs text-indigo-400 hover:text-indigo-600 transition-colors flex items-center justify-center gap-1">
-        <i class="fa-solid fa-plus text-[10px]"></i> ブロックを追加・編集
-      </a>
-    </div>
   </div>
   {% else %}
   <div class="mb-8">
@@ -36,12 +29,7 @@
     </div>
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-8 text-center">
       <p class="text-sm font-bold text-gray-500 mb-1">工程ブロックがまだありません</p>
-      <p class="text-xs text-gray-400 mb-5">セットアップからブロックを追加してください</p>
-      {# 将来: production_detail 主画面から直接追加できる UI に置き換え予定 #}
-      <a href="{% url 'productions:setup' production.pk %}"
-         class="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-500 hover:text-indigo-700 transition-colors">
-        <i class="fa-solid fa-plus text-xs"></i> セットアップで追加する
-      </a>
+      <p class="text-xs text-gray-400">表示できる工程ブロックがありません</p>
     </div>
   </div>
   {% endif %}

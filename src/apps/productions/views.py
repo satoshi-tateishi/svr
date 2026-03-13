@@ -137,7 +137,7 @@ class StaffRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin, V
 
         return render(
             request,
-            'productions/staff_request_bulk_form.html',
+            'productions/unused/staff_request_bulk_form.html',
             {
                 'day': day,
                 'initial_requests': requests_data,
@@ -165,7 +165,7 @@ class StaffRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin, V
             error_context['initial_requests'] = submitted_data
         except json.JSONDecodeError:
             error_context['error_message'] = 'データの形式が不正です。'
-            return render(request, 'productions/staff_request_bulk_form.html', error_context)
+            return render(request, 'productions/unused/staff_request_bulk_form.html', error_context)
 
         # 1. 有効な行のみ抽出・バリデーション（ポジション未選択の行は無視）
         valid_items = []
@@ -180,18 +180,30 @@ class StaffRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin, V
                 qty = int(item.get('quantity') or 0)
             except (ValueError, TypeError):
                 error_context['error_message'] = '入力内容が不正です。'
-                return render(request, 'productions/staff_request_bulk_form.html', error_context)
+                return render(
+                    request,
+                    'productions/unused/staff_request_bulk_form.html',
+                    error_context,
+                )
 
             # ポジションの実在確認
             if pos_id not in valid_position_ids:
                 error_context['error_message'] = f'不正なポジションIDです (ID:{pos_id})。'
-                return render(request, 'productions/staff_request_bulk_form.html', error_context)
+                return render(
+                    request,
+                    'productions/unused/staff_request_bulk_form.html',
+                    error_context,
+                )
 
             # 数量チェック
             if qty < 1:
                 pos_name = position_map.get(pos_id)
                 error_context['error_message'] = f'「{pos_name}」は1名以上で入力してください。'
-                return render(request, 'productions/staff_request_bulk_form.html', error_context)
+                return render(
+                    request,
+                    'productions/unused/staff_request_bulk_form.html',
+                    error_context,
+                )
 
             # 時間帯のパース
             raw_start = (item.get('start_time') or '').strip() or None
@@ -204,14 +216,22 @@ class StaffRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin, V
                 error_context['error_message'] = (
                     f'「{pos_name}」：終了時間のみの入力はできません。開始時間も入力してください。'
                 )
-                return render(request, 'productions/staff_request_bulk_form.html', error_context)
+                return render(
+                    request,
+                    'productions/unused/staff_request_bulk_form.html',
+                    error_context,
+                )
 
             # start_time > end_time はエラー
             if raw_start and raw_end and raw_start >= raw_end:
                 error_context['error_message'] = (
                     f'「{pos_name}」：開始時間は終了時間より前にしてください。'
                 )
-                return render(request, 'productions/staff_request_bulk_form.html', error_context)
+                return render(
+                    request,
+                    'productions/unused/staff_request_bulk_form.html',
+                    error_context,
+                )
 
             valid_items.append(
                 {
@@ -332,7 +352,7 @@ class VehicleRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin,
 
         return render(
             request,
-            'productions/vehicle_request_bulk_form.html',
+            'productions/unused/vehicle_request_bulk_form.html',
             {
                 'day': day,
                 'initial_requests': requests_data,
@@ -359,7 +379,11 @@ class VehicleRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin,
             error_context['initial_requests'] = submitted_data
         except json.JSONDecodeError:
             error_context['error_message'] = 'データの形式が不正です。'
-            return render(request, 'productions/vehicle_request_bulk_form.html', error_context)
+            return render(
+                request,
+                'productions/unused/vehicle_request_bulk_form.html',
+                error_context,
+            )
 
         # 有効行の抽出とバリデーション
         valid_items = []
@@ -374,17 +398,29 @@ class VehicleRequestBulkEditView(RequestEditPermissionMixin, LoginRequiredMixin,
                 vehicle_id = int(raw_vehicle_id)
             except (ValueError, TypeError):
                 error_context['error_message'] = '入力内容が不正です。'
-                return render(request, 'productions/vehicle_request_bulk_form.html', error_context)
+                return render(
+                    request,
+                    'productions/unused/vehicle_request_bulk_form.html',
+                    error_context,
+                )
 
             if vehicle_id not in valid_vehicle_ids:
                 error_context['error_message'] = f'不正な車両IDです (ID:{vehicle_id})。'
-                return render(request, 'productions/vehicle_request_bulk_form.html', error_context)
+                return render(
+                    request,
+                    'productions/unused/vehicle_request_bulk_form.html',
+                    error_context,
+                )
 
             # request_kind のバリデーション：未指定は load_in、不正値はエラー
             raw_kind = item.get('request_kind') or VehicleRequest.RequestKind.LOAD_IN
             if raw_kind not in valid_request_kinds:
                 error_context['error_message'] = f'申請種別の値が不正です（{raw_kind}）。'
-                return render(request, 'productions/vehicle_request_bulk_form.html', error_context)
+                return render(
+                    request,
+                    'productions/unused/vehicle_request_bulk_form.html',
+                    error_context,
+                )
 
             raw_time = item.get('requested_time') or None
             raw_arrival_time = item.get('arrival_requested_time') or None
@@ -494,7 +530,7 @@ class StaffRequestEditView(LoginRequiredMixin, View):
         form = StaffRequestForm(instance=instance)
         return render(
             request,
-            'productions/staff_request_form.html',
+            'productions/unused/staff_request_form.html',
             {'day': day, 'form': form, 'instance': instance},
         )
 
@@ -524,7 +560,7 @@ class StaffRequestEditView(LoginRequiredMixin, View):
 
         return render(
             request,
-            'productions/staff_request_form.html',
+            'productions/unused/staff_request_form.html',
             {'day': day, 'form': form, 'instance': instance},
         )
 
@@ -741,7 +777,7 @@ class ProductionSetupView(LoginRequiredMixin, View):
 
         return render(
             request,
-            'productions/production_setup.html',
+            'productions/unused/production_setup.html',
             {
                 'production': production,
                 'block_defs': block_defs,
@@ -764,7 +800,7 @@ class ProductionSetupView(LoginRequiredMixin, View):
 
         return render(
             request,
-            'productions/production_setup.html',
+            'productions/unused/production_setup.html',
             {
                 'production': production,
                 'block_defs': SETUP_BLOCKS,
@@ -840,7 +876,11 @@ class ProcessDayEditView(LoginRequiredMixin, View):
     def get(self, request, pk):
         day = get_object_or_404(ProcessDay, pk=pk)
         form = ProcessDayForm(instance=day)
-        return render(request, 'productions/process_day_form.html', {'day': day, 'form': form})
+        return render(
+            request,
+            'productions/unused/process_day_form.html',
+            {'day': day, 'form': form},
+        )
 
     def post(self, request, pk):
         day = get_object_or_404(ProcessDay, pk=pk)
@@ -853,7 +893,11 @@ class ProcessDayEditView(LoginRequiredMixin, View):
             response['HX-Redirect'] = reverse('productions:detail', kwargs={'pk': production_id})
             return response
 
-        return render(request, 'productions/process_day_form.html', {'day': day, 'form': form})
+        return render(
+            request,
+            'productions/unused/process_day_form.html',
+            {'day': day, 'form': form},
+        )
 
 
 class ProcessDayCreateView(LoginRequiredMixin, View):
@@ -868,7 +912,7 @@ class ProcessDayCreateView(LoginRequiredMixin, View):
         form = ProcessDayForm(initial=initial)
         return render(
             request,
-            'productions/process_day_form.html',
+            'productions/unused/process_day_form.html',
             {'production': production, 'form': form, 'is_create': True},
         )
 
@@ -889,7 +933,7 @@ class ProcessDayCreateView(LoginRequiredMixin, View):
 
         return render(
             request,
-            'productions/process_day_form.html',
+            'productions/unused/process_day_form.html',
             {'production': production, 'form': form, 'is_create': True},
         )
 
@@ -1190,15 +1234,11 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
             pk=process_pk,
         )
         ctx = self._build_context(process)
-        # HTMX リクエストの場合はモーダル用テンプレートを返す
-        if request.headers.get('HX-Request'):
-            return render(request, 'productions/process_block_edit_modal.html', ctx)
-        return render(request, 'productions/process_block_edit.html', ctx)
+        return render(request, 'productions/process_block_edit_modal.html', ctx)
 
     def post(self, request, process_pk):
         process = get_object_or_404(Process.objects.select_related('production'), pk=process_pk)
         block_key = process.block_key
-        production = process.production
 
         try:
             with transaction.atomic():
@@ -1209,29 +1249,19 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
                 else:
                     self._save_single_day_block(request, process)
 
-            # HTMX モーダル内保存成功: modal をクリアし processBlockSaved イベントを発火
-            if request.headers.get('HX-Request'):
-                response = HttpResponse('<div></div>')
-                response['HX-Trigger'] = 'processBlockSaved'
-                return response
-
-            messages.success(request, f'「{process.title}」を保存しました。')
-            return redirect('productions:detail', pk=production.pk)
+            response = HttpResponse('<div></div>')
+            response['HX-Trigger'] = 'processBlockSaved'
+            return response
         except ValueError as e:
-            if request.headers.get('HX-Request'):
-                ctx = self._build_context(process)
-                ctx['post_data'] = request.POST
-                ctx['error_message'] = str(e)
-                return render(
-                    request,
-                    'productions/process_block_edit_modal.html',
-                    ctx,
-                    status=200,
-                )
-            messages.error(request, str(e))
             ctx = self._build_context(process)
             ctx['post_data'] = request.POST
-            return render(request, 'productions/process_block_edit.html', ctx)
+            ctx['error_message'] = str(e)
+            return render(
+                request,
+                'productions/process_block_edit_modal.html',
+                ctx,
+                status=200,
+            )
 
     # ─── コンテキスト構築 ────────────────────────────────────────────
 

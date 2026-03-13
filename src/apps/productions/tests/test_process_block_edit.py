@@ -137,6 +137,7 @@ class TestProcessBlockEdit:
         return client.post(
             reverse('productions:block_edit', kwargs={'process_pk': process.pk}),
             payload,
+            HTTP_HX_REQUEST='true',
         )
 
     def test_form_shows_separate_add_buttons_and_no_block_note(self, client):
@@ -181,7 +182,8 @@ class TestProcessBlockEdit:
             ],
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert response['HX-Trigger'] == 'processBlockSaved'
         transport_unit = ProcessRequestUnit.objects.get(
             process=self.theatre_process,
             unit_type=ProcessRequestUnit.UnitType.TRANSPORT,
@@ -209,7 +211,8 @@ class TestProcessBlockEdit:
             [self._transport_unit(work_date='2026-04-07', vehicle_note='旅荷積み便メモ')],
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert response['HX-Trigger'] == 'processBlockSaved'
         unit = ProcessRequestUnit.objects.get(process=self.travel_load_process)
         vehicle_request = VehicleRequest.objects.get(process_request_unit=unit)
 
@@ -237,7 +240,8 @@ class TestProcessBlockEdit:
             final_performance_location='大阪',
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert response['HX-Trigger'] == 'processBlockSaved'
         unit = ProcessRequestUnit.objects.get(process=self.travel_unload_process)
         self.travel_unload_process.refresh_from_db()
 

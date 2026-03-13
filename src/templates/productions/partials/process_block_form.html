@@ -212,6 +212,23 @@
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <!-- 日付ヘッダー -->
           <div class="px-4 py-3 bg-gray-50 border-b border-gray-100 space-y-2">
+            {% if block_key == 'theatre_setup' %}
+            <div class="flex gap-1.5">
+              {% for val, label in setup_label_choices %}
+              <label :class="day.setup_label === '{{ val }}'
+                              ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                              : 'border-gray-200 text-gray-400 hover:border-gray-300'"
+                     class="flex-1 flex items-center justify-center py-1.5 px-2 rounded-lg border-2
+                            cursor-pointer text-[10px] font-bold transition-all">
+                <input type="radio" :name="'setup_label_' + idx" value="{{ val }}"
+                       :checked="day.setup_label === '{{ val }}'"
+                       @change="day.setup_label = '{{ val }}'"
+                       class="sr-only">
+                {{ label }}
+              </label>
+              {% endfor %}
+            </div>
+            {% endif %}
             <div>
               <label class="block text-[10px] font-bold text-gray-500 mb-1">
                 {% if block_key == 'rehearsal_setup' %}稽古場仕込み日{% elif block_key == 'rehearsal_strike' %}稽古場バラシ日{% elif block_key == 'theatre_setup' %}劇場仕込み日{% elif block_key == 'theatre_strike' %}劇場バラシ日{% elif block_key == 'travel_load' %}旅荷積み日{% elif block_key == 'travel_unload' %}旅荷降ろし日{% else %}実施日{% endif %}

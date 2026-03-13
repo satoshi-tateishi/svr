@@ -1,0 +1,64 @@
+<script>
+function staffDaysApp() {
+  return {
+    days: [],
+    positionList: [],
+
+    init() {
+      // json_script タグから安全に読み取る（x-data 属性への直接埋め込みは " の衝突でNG）
+      const daysEl = document.getElementById('days-data-json');
+      const posEl = document.getElementById('position-list-json');
+      const initialDays = daysEl ? JSON.parse(daysEl.textContent) : [];
+      const positionList = posEl ? JSON.parse(posEl.textContent) : [];
+
+      this.positionList = positionList;
+
+      const src = (Array.isArray(initialDays) && initialDays.length > 0) ? initialDays : [];
+      this.days = src.map(d => ({
+        date: d.date || '',
+        standby_time: d.standby_time || '',
+        setup_label: d.setup_label || 'setup_staff',
+        positions: Object.fromEntries(
+          positionList.map(p => [p.slug, {
+            qty: (d.positions && d.positions[p.slug] != null)
+              ? d.positions[p.slug].qty : '',
+            include_self: (d.positions && d.positions[p.slug])
+              ? d.positions[p.slug].include_self : true,
+          }])
+        ),
+      }));
+      if (this.days.length === 0) this.addDay();
+    },
+
+    addDay() {
+      this.days.push({
+        date: '',
+        standby_time: '',
+        setup_label: 'setup_staff',
+        positions: Object.fromEntries(
+          this.positionList.map(p => [p.slug, { qty: '', include_self: true }])
+        ),
+      });
+    },
+
+    duplicateDay(idx) {
+      const copy = JSON.parse(JSON.stringify(this.days[idx]));
+      if (copy.date) {
+        // new Date('YYYY-MM-DD') は UTC 解釈で JST では前日になるため、ローカル日付で計算する
+        const [y, m, d] = copy.date.split('-').map(Number);
+        const dt = new Date(y, m - 1, d + 1);
+        copy.date = [
+          dt.getFullYear(),
+          String(dt.getMonth() + 1).padStart(2, '0'),
+          String(dt.getDate()).padStart(2, '0'),
+        ].join('-');
+      }
+      this.days.splice(idx + 1, 0, copy);
+    },
+
+    removeDay(idx) {
+      if (this.days.length > 1) this.days.splice(idx, 1);
+    },
+  };
+}
+</script>

@@ -53,76 +53,247 @@
 
       {% else %}
 
-        {# 車両申請（vehicles リスト全件表示。複数件対応済み） #}
-        {% if pb.vehicles %}
-        <div>
-          <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-            <i class="fa-solid fa-truck text-gray-300"></i> 荷積み・搬入
-          </div>
-          <div class="space-y-2">
-            {% for vr in pb.vehicles %}
-            <div class="bg-gray-50 rounded-xl p-3 space-y-1.5 text-xs text-gray-700">
-              <div class="flex flex-wrap gap-x-4 gap-y-1">
-                {% if vr.effective_date %}
-                  <span><span class="text-gray-400">配車日</span> {{ vr.effective_date|date:"n/j" }}</span>
-                {% endif %}
-                {% if vr.requested_vehicle %}
-                  <span><span class="text-gray-400">車種</span> {{ vr.requested_vehicle.name }}（{{ vr.requested_vehicle.get_vehicle_type_display }}）</span>
-                {% else %}
-                  <span class="text-gray-400">車種未定</span>
-                {% endif %}
-              </div>
-              <div class="flex gap-3 mt-1">
-                <div class="flex-1 space-y-1">
-                  {% if vr.requested_time %}<div><span class="text-gray-400">配車</span> {{ vr.requested_time|time:"H:i" }}</div>{% endif %}
-                  {% if vr.route_from %}<div><span class="text-gray-400">出発地</span> {{ vr.route_from }}</div>{% endif %}
-                  {% if vr.loading_qty %}
-                    <div><span class="text-gray-400">積み込み</span> {{ vr.loading_qty }}人{% if vr.loading_include_self %}<span class="text-indigo-500 ml-1">✓本人含む</span>{% endif %}</div>
-                  {% endif %}
-                </div>
-                <div class="text-gray-300 self-center"><i class="fa-solid fa-arrow-right text-xs"></i></div>
-                <div class="flex-1 space-y-1">
-                  {% if vr.arrival_requested_time %}<div><span class="text-gray-400">到着</span> {{ vr.arrival_requested_time|time:"H:i" }}</div>{% endif %}
-                  {% if vr.route_to %}<div><span class="text-gray-400">目的地</span> {{ vr.route_to }}</div>{% endif %}
-                  {% if vr.unloading_qty %}
-                    <div><span class="text-gray-400">搬入</span> {{ vr.unloading_qty }}人{% if vr.unloading_include_self %}<span class="text-indigo-500 ml-1">✓本人含む</span>{% endif %}</div>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-        {% endif %}
+        {# 稽古場バラシ: 人員申請→搬出・荷降ろし の順 / それ以外: 荷積み・搬入→人員申請 の順 #}
+        {% if pb.block_key == 'rehearsal_strike' %}
 
-        {# 人員申請 #}
-        {% if pb.days %}
-        <div>
-          <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-            <i class="fa-solid fa-users text-gray-300"></i> 人員申請
-          </div>
-          <div class="space-y-1.5">
-            {% for day in pb.days %}
-            <div class="bg-gray-50 rounded-xl p-3 text-xs text-gray-700">
-              <div class="flex items-center gap-3 mb-1.5">
-                <span class="font-bold text-gray-900">{{ day.date|date:"n/j（D）" }}</span>
-                {% if day.standby_time %}<span class="text-gray-500">{{ day.standby_time|time:"H:i" }} 〜</span>{% endif %}
-              </div>
-              {% if day.staff_rows %}
-                {% for row in day.staff_rows %}
-                <div class="flex items-center gap-2">
-                  <span class="text-gray-400 w-16 flex-none">{{ row.label }}</span>
-                  <span class="font-bold">{{ row.qty }}人</span>
-                  {% if row.include_self %}<span class="text-indigo-500 text-[10px]">✓本人含む</span>{% endif %}
-                </div>
-                {% endfor %}
-              {% else %}
-                <div class="text-gray-400 text-xs">人員未入力</div>
-              {% endif %}
+          {# 人員申請（先） #}
+          {% if pb.days %}
+          <div>
+            <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+              <i class="fa-solid fa-users text-gray-300"></i> 人員申請
             </div>
-            {% endfor %}
+            <div class="space-y-1.5">
+              {% for day in pb.days %}
+              <div class="bg-gray-50 rounded-xl overflow-hidden flex text-xs text-gray-700">
+                <div class="flex-none w-14 bg-indigo-50 flex flex-col items-center justify-center px-1 py-3 gap-0.5 border-r border-indigo-100">
+                  <span class="text-base font-black text-gray-900 leading-tight">{{ day.date|date:"n/j" }}</span>
+                  {% with dow=day.date|date:"w" %}
+                  <span class="text-[10px] leading-none {% if dow == '0' %}text-red-500{% elif dow == '6' %}text-sky-500{% else %}text-gray-400{% endif %}">{{ day.date|date:"D" }}</span>
+                  {% endwith %}
+                </div>
+                <div class="flex-1 px-3 py-2.5 flex flex-col justify-center space-y-1.5">
+                  {% if day.standby_time %}
+                  <div>
+                    <div class="text-[10px] text-gray-400">開始時間</div>
+                    <div class="text-sm font-black text-gray-900">{{ day.standby_time|time:"H:i" }}</div>
+                  </div>
+                  {% endif %}
+                  {% if day.staff_rows %}
+                    {% for row in day.staff_rows %}
+                    <div class="flex items-center gap-2 py-0.5">
+                      <span class="text-gray-400 w-16 flex-none">{{ row.label }}</span>
+                      <span class="font-bold">{{ row.qty }}人</span>
+                      {% if row.include_self %}<span class="text-indigo-500 text-[10px]">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px]">×本人含まず</span>{% endif %}
+                    </div>
+                    {% endfor %}
+                  {% else %}
+                    <div class="text-gray-400 text-xs">人員未入力</div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
           </div>
-        </div>
+          {% endif %}
+
+          {# 搬出・荷降ろし（後） #}
+          {% if pb.vehicles %}
+          <div>
+            <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+              <i class="fa-solid fa-truck text-gray-300"></i> 搬出・荷降ろし
+            </div>
+            <div class="space-y-2">
+              {% for vr in pb.vehicles %}
+              <div class="bg-gray-50 rounded-xl overflow-hidden flex text-xs text-gray-700">
+                <div class="flex-none w-14 bg-sky-50 flex flex-col items-center justify-center px-1 py-3 gap-0.5 border-r border-sky-100">
+                  {% if vr.effective_date %}
+                    <span class="text-base font-black text-gray-900 leading-tight">{{ vr.effective_date|date:"n/j" }}</span>
+                    {% with dow=vr.effective_date|date:"w" %}
+                    <span class="text-[10px] leading-none {% if dow == '0' %}text-red-500{% elif dow == '6' %}text-sky-500{% else %}text-gray-400{% endif %}">{{ vr.effective_date|date:"D"|slice:":1" }}</span>
+                    {% endwith %}
+                  {% else %}
+                    <span class="text-xs text-gray-400">未定</span>
+                  {% endif %}
+                </div>
+                <div class="flex-1 px-3 py-2.5 space-y-2">
+                  <div>
+                    {% if vr.requested_vehicle %}
+                      <span class="font-bold text-gray-900">{{ vr.requested_vehicle.name }}</span>
+                      <span class="text-gray-400">（{{ vr.requested_vehicle.get_vehicle_type_display }}）</span>
+                    {% else %}
+                      <span class="text-gray-400">車種未定</span>
+                    {% endif %}
+                  </div>
+                  <div class="flex gap-2 items-start">
+                    <div class="flex-1 bg-white/70 rounded-lg p-2.5 space-y-1.5">
+                      {% if vr.requested_time %}
+                      <div>
+                        <div class="text-[10px] text-gray-400">配車</div>
+                        <div class="text-sm font-black text-gray-900">{{ vr.requested_time|time:"H:i" }}</div>
+                      </div>
+                      {% endif %}
+                      <div>
+                        <div class="text-[10px] text-gray-400">出発地</div>
+                        <div class="text-gray-700 font-bold">{% if vr.route_from %}{{ vr.route_from }}{% else %}<span class="text-gray-300">未設定</span>{% endif %}</div>
+                      </div>
+                      {% if vr.loading_qty %}
+                      <div>
+                        <span class="text-[10px] text-gray-400">積み込み</span>
+                        <span class="font-bold ml-1">{{ vr.loading_qty }}人</span>
+                        {% if vr.loading_include_self %}<span class="text-indigo-500 text-[10px] ml-1">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px] ml-1">×本人含まず</span>{% endif %}
+                      </div>
+                      {% endif %}
+                    </div>
+                    <div class="flex-none self-center text-gray-300">
+                      <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </div>
+                    <div class="flex-1 bg-white/70 rounded-lg p-2.5 space-y-1.5">
+                      {% if vr.arrival_requested_time %}
+                      <div>
+                        <div class="text-[10px] text-gray-400">到着</div>
+                        <div class="text-sm font-black text-gray-900">{{ vr.arrival_requested_time|time:"H:i" }}</div>
+                      </div>
+                      {% endif %}
+                      <div>
+                        <div class="text-[10px] text-gray-400">目的地</div>
+                        <div class="text-gray-700 font-bold">{% if vr.route_to %}{{ vr.route_to }}{% else %}<span class="text-gray-300">未設定</span>{% endif %}</div>
+                      </div>
+                      {% if vr.unloading_qty %}
+                      <div>
+                        <span class="text-[10px] text-gray-400">搬入</span>
+                        <span class="font-bold ml-1">{{ vr.unloading_qty }}人</span>
+                        {% if vr.unloading_include_self %}<span class="text-indigo-500 text-[10px] ml-1">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px] ml-1">×本人含まず</span>{% endif %}
+                      </div>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+        {% else %}
+
+          {# 荷積み・搬入（先） #}
+          {% if pb.vehicles %}
+          <div>
+            <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+              <i class="fa-solid fa-truck text-gray-300"></i> 荷積み・搬入
+            </div>
+            <div class="space-y-2">
+              {% for vr in pb.vehicles %}
+              <div class="bg-gray-50 rounded-xl overflow-hidden flex text-xs text-gray-700">
+                <div class="flex-none w-14 bg-sky-50 flex flex-col items-center justify-center px-1 py-3 gap-0.5 border-r border-sky-100">
+                  {% if vr.effective_date %}
+                    <span class="text-base font-black text-gray-900 leading-tight">{{ vr.effective_date|date:"n/j" }}</span>
+                    {% with dow=vr.effective_date|date:"w" %}
+                    <span class="text-[10px] leading-none {% if dow == '0' %}text-red-500{% elif dow == '6' %}text-sky-500{% else %}text-gray-400{% endif %}">{{ vr.effective_date|date:"D"|slice:":1" }}</span>
+                    {% endwith %}
+                  {% else %}
+                    <span class="text-xs text-gray-400">未定</span>
+                  {% endif %}
+                </div>
+                <div class="flex-1 px-3 py-2.5 space-y-2">
+                  <div>
+                    {% if vr.requested_vehicle %}
+                      <span class="font-bold text-gray-900">{{ vr.requested_vehicle.name }}</span>
+                      <span class="text-gray-400">（{{ vr.requested_vehicle.get_vehicle_type_display }}）</span>
+                    {% else %}
+                      <span class="text-gray-400">車種未定</span>
+                    {% endif %}
+                  </div>
+                  <div class="flex gap-2 items-start">
+                    <div class="flex-1 bg-white/70 rounded-lg p-2.5 space-y-1.5">
+                      {% if vr.requested_time %}
+                      <div>
+                        <div class="text-[10px] text-gray-400">配車</div>
+                        <div class="text-sm font-black text-gray-900">{{ vr.requested_time|time:"H:i" }}</div>
+                      </div>
+                      {% endif %}
+                      <div>
+                        <div class="text-[10px] text-gray-400">出発地</div>
+                        <div class="text-gray-700 font-bold">{% if vr.route_from %}{{ vr.route_from }}{% else %}<span class="text-gray-300">未設定</span>{% endif %}</div>
+                      </div>
+                      {% if vr.loading_qty %}
+                      <div>
+                        <span class="text-[10px] text-gray-400">積み込み</span>
+                        <span class="font-bold ml-1">{{ vr.loading_qty }}人</span>
+                        {% if vr.loading_include_self %}<span class="text-indigo-500 text-[10px] ml-1">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px] ml-1">×本人含まず</span>{% endif %}
+                      </div>
+                      {% endif %}
+                    </div>
+                    <div class="flex-none self-center text-gray-300">
+                      <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </div>
+                    <div class="flex-1 bg-white/70 rounded-lg p-2.5 space-y-1.5">
+                      {% if vr.arrival_requested_time %}
+                      <div>
+                        <div class="text-[10px] text-gray-400">到着</div>
+                        <div class="text-sm font-black text-gray-900">{{ vr.arrival_requested_time|time:"H:i" }}</div>
+                      </div>
+                      {% endif %}
+                      <div>
+                        <div class="text-[10px] text-gray-400">目的地</div>
+                        <div class="text-gray-700 font-bold">{% if vr.route_to %}{{ vr.route_to }}{% else %}<span class="text-gray-300">未設定</span>{% endif %}</div>
+                      </div>
+                      {% if vr.unloading_qty %}
+                      <div>
+                        <span class="text-[10px] text-gray-400">搬入</span>
+                        <span class="font-bold ml-1">{{ vr.unloading_qty }}人</span>
+                        {% if vr.unloading_include_self %}<span class="text-indigo-500 text-[10px] ml-1">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px] ml-1">×本人含まず</span>{% endif %}
+                      </div>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {# 人員申請（後） #}
+          {% if pb.days %}
+          <div>
+            <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+              <i class="fa-solid fa-users text-gray-300"></i> 人員申請
+            </div>
+            <div class="space-y-1.5">
+              {% for day in pb.days %}
+              <div class="bg-gray-50 rounded-xl overflow-hidden flex text-xs text-gray-700">
+                <div class="flex-none w-14 bg-indigo-50 flex flex-col items-center justify-center px-1 py-3 gap-0.5 border-r border-indigo-100">
+                  <span class="text-base font-black text-gray-900 leading-tight">{{ day.date|date:"n/j" }}</span>
+                  {% with dow=day.date|date:"w" %}
+                  <span class="text-[10px] leading-none {% if dow == '0' %}text-red-500{% elif dow == '6' %}text-sky-500{% else %}text-gray-400{% endif %}">{{ day.date|date:"D" }}</span>
+                  {% endwith %}
+                </div>
+                <div class="flex-1 px-3 py-2.5 flex flex-col justify-center space-y-1.5">
+                  {% if day.standby_time %}
+                  <div>
+                    <div class="text-[10px] text-gray-400">開始時間</div>
+                    <div class="text-sm font-black text-gray-900">{{ day.standby_time|time:"H:i" }}</div>
+                  </div>
+                  {% endif %}
+                  {% if day.staff_rows %}
+                    {% for row in day.staff_rows %}
+                    <div class="flex items-center gap-2 py-0.5">
+                      <span class="text-gray-400 w-16 flex-none">{{ row.label }}</span>
+                      <span class="font-bold">{{ row.qty }}人</span>
+                      {% if row.include_self %}<span class="text-indigo-500 text-[10px]">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px]">×本人含まず</span>{% endif %}
+                    </div>
+                    {% endfor %}
+                  {% else %}
+                    <div class="text-gray-400 text-xs">人員未入力</div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
         {% endif %}
 
         {# 備考 #}

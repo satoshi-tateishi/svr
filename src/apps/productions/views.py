@@ -66,7 +66,11 @@ def _build_process_blocks(processes_qs):
             staff_by_slug = {sr.position.slug: sr for sr in day.staff_requests.all()}
             staff_rows = [
                 {
-                    'label': label,
+                    'label': (
+                        day.get_setup_label_display()
+                        if block_key == 'theatre_setup' and slug == 'setup-crew'
+                        else label
+                    ),
                     'qty': staff_by_slug[slug].quantity,
                     'include_self': staff_by_slug[slug].include_self,
                 }
@@ -78,6 +82,8 @@ def _build_process_blocks(processes_qs):
                     'date': day.date,
                     'standby_time': day.start_time,
                     'staff_rows': staff_rows,
+                    'setup_label': day.setup_label,
+                    'setup_label_display': day.get_setup_label_display(),
                 }
             )
             vehicles.extend(list(day.vehicle_requests.all()))
@@ -1214,7 +1220,7 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
                     request,
                     'productions/process_block_edit_modal.html',
                     ctx,
-                    status=422,
+                    status=200,
                 )
             messages.error(request, str(e))
             ctx = self._build_context(process)
@@ -1247,11 +1253,14 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
                 {
                     'date': d.date.isoformat() if d.date else '',
                     'standby_time': d.start_time.strftime('%H:%M') if d.start_time else '',
+                    'setup_label': d.setup_label or 'setup_staff',
                     'positions': {
                         s: {
                             'qty': staff_by_slug[s].quantity if s in staff_by_slug else '',
                             'include_self': (
-                                staff_by_slug[s].include_self if s in staff_by_slug else False
+                                staff_by_slug[s].include_self
+                                if s in staff_by_slug
+                                else (block_key == 'theatre_setup' and s == 'setup-crew')
                             ),
                         }
                         for s in position_map
@@ -1273,6 +1282,7 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
             'existing_vehicle': existing_vehicle,
             'existing_staff_helper': existing_staff_helper,
             'position_rows': [],  # kizai_standby との互換性のため残す
+            'setup_label_choices': ProcessDay.SETUP_LABEL_CHOICES,
         }
 
     # ─── 保存ロジック ────────────────────────────────────────────────
@@ -1366,12 +1376,16 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
                 except ValueError:
                     pass
 
+            day_setup_label = (
+                day_data.get('setup_label', '') if block_key == 'theatre_setup' else ''
+            )
             pd = ProcessDay.objects.create(
                 process=process,
                 process_type=pt,
                 date=block_date,
                 start_time=standby_time,
                 order=idx,
+                setup_label=day_setup_label,
             )
             if first_day is None:
                 first_day = pd
@@ -1407,13 +1421,14 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
             except (Vehicle.DoesNotExist, ValueError):
                 pass
 
-        if vehicle:
+        vehicle_date_str = request.POST.get('vehicle_date', '').strip()
+        # 配車日が未入力の場合は車両申請なしとして扱う
+        if vehicle and vehicle_date_str:
             req_time_str = request.POST.get('requested_time', '').strip()
             arr_time_str = request.POST.get('arrival_requested_time', '').strip()
             route_from = request.POST.get('route_from', '').strip()
             route_to = request.POST.get('route_to', '').strip()
             req_kind = request.POST.get('request_kind', VehicleRequest.RequestKind.LOAD_IN)
-            vehicle_date_str = request.POST.get('vehicle_date', '').strip()
             # 荷役人数（車両申請がある場合のみ保存）
             loading_qty_str = request.POST.get('loading_qty', '').strip()
             unloading_qty_str = request.POST.get('unloading_qty', '').strip()
@@ -1427,8 +1442,7 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
                     req_time = datetime.strptime(req_time_str, '%H:%M').time()
                 if arr_time_str:
                     arr_time = datetime.strptime(arr_time_str, '%H:%M').time()
-                if vehicle_date_str:
-                    vehicle_date = datetime.strptime(vehicle_date_str, '%Y-%m-%d').date()
+                vehicle_date = datetime.strptime(vehicle_date_str, '%Y-%m-%d').date()
                 if loading_qty_str:
                     loading_qty = max(0, int(loading_qty_str))
                 if unloading_qty_str:

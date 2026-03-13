@@ -199,6 +199,12 @@ class Process(models.Model):
 class ProcessDay(models.Model):
     """個別の工程（タスク単位）"""
 
+    SETUP_LABEL_CHOICES = [
+        ('setup_staff', '仕込み人数'),
+        ('stage_rehearsal', '舞台稽古'),
+        ('opening_night', '初日'),
+    ]
+
     process = models.ForeignKey(
         Process, on_delete=models.CASCADE, related_name='days', verbose_name='工程ブロック'
     )
@@ -213,6 +219,15 @@ class ProcessDay(models.Model):
     order = models.PositiveIntegerField(default=0, verbose_name='表示順')
 
     note = models.TextField(blank=True, verbose_name='備考')
+
+    # 劇場仕込みブロック専用: その日の仕込みフェーズ（theatre_setup のみ意味を持つ）
+    setup_label = models.CharField(
+        max_length=20,
+        choices=SETUP_LABEL_CHOICES,
+        blank=True,
+        default='',
+        verbose_name='劇場仕込みラベル',
+    )
 
     class Meta:
         verbose_name = '工程タスク'

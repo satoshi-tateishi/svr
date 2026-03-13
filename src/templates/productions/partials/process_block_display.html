@@ -115,8 +115,8 @@
                     {% if unit.vehicle_request.loading_qty %}
                     <div>
                       <span class="text-[10px] text-gray-400">{% if pb.block_key == 'rehearsal_strike' or pb.block_key == 'theatre_strike' %}搬出{% elif pb.block_key == 'travel_unload' %}旅荷降ろし{% else %}積み込み{% endif %}</span>
-                      <span class="font-bold ml-1">{{ unit.vehicle_request.loading_qty }}人</span>
-                      {% if unit.vehicle_request.loading_include_self %}<span class="text-indigo-500 text-[10px] ml-1">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px] ml-1">×本人含まず</span>{% endif %}
+                      <span class="text-base font-black text-gray-900 ml-1">{{ unit.vehicle_request.loading_qty }}人</span>
+                      {% if unit.vehicle_request.loading_include_self %}<span class="text-green-600 text-[10px] font-bold ml-1">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px] ml-1">×本人含まず</span>{% endif %}
                     </div>
                     {% endif %}
                   </div>
@@ -137,8 +137,8 @@
                     {% if unit.vehicle_request.unloading_qty %}
                     <div>
                       <span class="text-[10px] text-gray-400">{% if pb.block_key == 'rehearsal_strike' or pb.block_key == 'theatre_strike' %}荷降ろし{% elif pb.block_key == 'travel_unload' %}倉庫荷降ろし{% else %}搬入{% endif %}</span>
-                      <span class="font-bold ml-1">{{ unit.vehicle_request.unloading_qty }}人</span>
-                      {% if unit.vehicle_request.unloading_include_self %}<span class="text-indigo-500 text-[10px] ml-1">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px] ml-1">×本人含まず</span>{% endif %}
+                      <span class="text-base font-black text-gray-900 ml-1">{{ unit.vehicle_request.unloading_qty }}人</span>
+                      {% if unit.vehicle_request.unloading_include_self %}<span class="text-green-600 text-[10px] font-bold ml-1">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px] ml-1">×本人含まず</span>{% endif %}
                     </div>
                     {% endif %}
                   </div>
@@ -180,7 +180,7 @@
                   <div class="flex items-center gap-2 py-0.5">
                     <span class="text-gray-400 w-16 flex-none">{{ row.label }}</span>
                     <span class="text-base font-black text-gray-900">{{ row.qty }}人</span>
-                    {% if row.include_self %}<span class="text-indigo-500 text-[10px]">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px]">×本人含まず</span>{% endif %}
+                    {% if row.include_self %}<span class="text-green-600 text-[10px] font-bold">✓本人含む</span>{% else %}<span class="text-red-400 text-[10px]">×本人含まず</span>{% endif %}
                   </div>
                   {% endfor %}
                 {% else %}

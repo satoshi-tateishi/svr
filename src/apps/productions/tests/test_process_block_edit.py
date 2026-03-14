@@ -311,7 +311,7 @@ class TestProcessBlockEdit:
             {'pb': pb, 'forloop': {'counter': 1}},
         )
 
-        assert '車両便申請' in content
+        assert '車両申請' not in content
         assert '人員申請' in content
         assert '人員備考' in content
         assert '便備考' not in content

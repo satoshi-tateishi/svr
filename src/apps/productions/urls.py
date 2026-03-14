@@ -15,6 +15,16 @@ urlpatterns = [
         name='processes_partial',
     ),
     path(
+        '<int:pk>/vehicle-assignments/',
+        views.VehicleAssignmentListView.as_view(),
+        name='vehicle_assignment_list',
+    ),
+    path(
+        'vehicle-assignments/<int:pk>/edit/',
+        views.VehicleAssignmentEditView.as_view(),
+        name='vehicle_assignment_edit',
+    ),
+    path(
         '<int:production_pk>/members/add/',
         views.ProductionMemberEditView.as_view(),
         name='member_add',

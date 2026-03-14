@@ -33,7 +33,7 @@
 現行 UI の中心ドメインです。
 
 - `Production` の作成・一覧・詳細
-- 工程ブロック (`Process`) と工程日 (`ProcessDay`) の管理
+- 工程ブロック (`Process`) と申請単位 (`ProcessRequestUnit`) の管理
 - 申請単位 (`ProcessRequestUnit`) ベースの構成管理
 - 人員申請 (`StaffRequest`) と車両申請 (`VehicleRequest`)
 - 管理側車両手配 (`productions.VehicleAssignment`)
@@ -50,6 +50,7 @@
 - 単価履歴 (`PerformanceFreelanceRate`)
 - 車輌マスタ・運行工程 (`Vehicle`, `VehicleOperation`)
 - Lock / PDF / 乖離ダッシュボード
+- ダッシュボードと Production 横断の車両手配管理 UI
 
 ## 現在の設計上の重要点
 
@@ -82,6 +83,12 @@
 - 成功時は `HX-Redirect`
 - 権限エラー時は HTMX なら HTML 403、通常リクエストなら通常 403
 
+### 6. テンプレート配置
+
+- `src/templates/productions/` は申請入力 UI を保持
+- `src/templates/production_management/` は `productions` から申請された内容を管理する UI を保持
+- `src/templates/performances/` は現行のテンプレート配置には使わない
+
 ## URL 構成
 
 - `/auth/`
@@ -89,13 +96,20 @@
 - `/productions/`
 - `/` は `/performances/` にリダイレクト
 
+主要導線:
+
+- `/performances/dashboard/` は乖離ダッシュボード
+- `/performances/dashboard/vehicle-assignments/` は Production 横断の車両手配管理
+- `/productions/<pk>/` は公演詳細・申請入力
+- `/productions/<pk>/vehicle-assignments/` は公演単位の車両手配管理
+
 ## 現在の実装状況
 
 実装済み:
 
 - Portal JWT 連携
 - `productions` の公演詳細・工程構成・人員申請・車両申請・車両手配 UI
-- `performances` のテンプレート展開・ダブルブッキング防止・Lock・PDF 出力・ダッシュボード
+- `performances` のダッシュボード / Production 横断車両手配管理 / ダブルブッキング防止・Lock・PDF 出力
 
 未実装または限定実装:
 
@@ -103,3 +117,4 @@
 - 外部 SaaS 連携
 - `productions` と `performances` の自動連携
 - Celery を使った非同期処理
+- `performances` の CRUD 画面（list/create/detail）公開

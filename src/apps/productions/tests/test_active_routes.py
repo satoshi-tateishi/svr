@@ -140,10 +140,10 @@ class TestProductionActiveRoutes:
     def test_dashboard_vehicle_assignment_page_and_modal_are_available(self, client):
         client.force_login(self.user)
 
-        list_response = client.get(reverse('performances:production_vehicle_assignments'))
+        list_response = client.get(reverse('productions:production_vehicle_assignments'))
         edit_response = client.get(
             reverse(
-                'performances:production_vehicle_assignment_edit',
+                'productions:production_vehicle_assignment_edit',
                 kwargs={'pk': self.vehicle_request.pk},
             ),
             HTTP_HX_REQUEST='true',
@@ -180,9 +180,9 @@ class TestProductionActiveRoutes:
     def test_dashboard_has_vehicle_management_entry(self, client):
         client.force_login(self.user)
 
-        response = client.get(reverse('performances:dashboard'))
+        response = client.get(reverse('productions:dashboard'))
 
         assert response.status_code == 200
         content = response.content.decode()
         assert '車両管理へ' in content
-        assert reverse('performances:production_vehicle_assignments') in content
+        assert reverse('productions:production_vehicle_assignments') in content

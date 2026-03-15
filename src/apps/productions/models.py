@@ -431,6 +431,24 @@ class VehicleRequest(models.Model):
             return self.process_day.date
         return None
 
+    @property
+    def effective_production(self):
+        """公演。process_day → process_request_unit の順で取得。"""
+        if self.process_day_id:
+            return self.process_day.process.production
+        if self.process_request_unit_id:
+            return self.process_request_unit.process.production
+        return None
+
+    @property
+    def effective_process_type(self):
+        """工程種別。process_day → process_request_unit の順で取得。"""
+        if self.process_day_id:
+            return self.process_day.process_type
+        if self.process_request_unit_id:
+            return self.process_request_unit.process_type
+        return None
+
     def __str__(self):
         return self.requested_vehicle.name if self.requested_vehicle else '未定車両'
 

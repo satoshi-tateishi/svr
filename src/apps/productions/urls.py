@@ -13,9 +13,29 @@ urlpatterns = [
         name='production_vehicle_assignments',
     ),
     path(
-        'dashboard/vehicle-requests/<int:pk>/edit/',
-        views.production_vehicle_assignment_edit,
-        name='production_vehicle_assignment_edit',
+        'dashboard/vehicle-assignments/<str:date_str>/edit/',
+        views.production_vehicle_assignment_day_edit,
+        name='production_vehicle_assignments_day_edit',
+    ),
+    path(
+        'dashboard/vehicle-assignments/<int:pk>/assign/',
+        views.production_vehicle_assignment_assign,
+        name='production_vehicle_assignment_assign',
+    ),
+    path(
+        'dashboard/vehicle-assignments/<int:pk>/assign/cancel/',
+        views.production_vehicle_assignment_assign_cancel,
+        name='production_vehicle_assignment_assign_cancel',
+    ),
+    path(
+        'dashboard/vehicle-assignments/<int:pk>/dnd-assign/',
+        views.production_vehicle_assignment_dnd_assign,
+        name='production_vehicle_assignment_dnd_assign',
+    ),
+    path(
+        'dashboard/vehicle-assignments/<int:pk>/dnd-remove/',
+        views.production_vehicle_assignment_dnd_remove,
+        name='production_vehicle_assignment_dnd_remove',
     ),
     path('create/', views.ProductionCreateView.as_view(), name='create'),
     path('<int:pk>/edit/', views.ProductionEditView.as_view(), name='edit'),

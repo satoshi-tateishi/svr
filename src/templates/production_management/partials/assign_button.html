@@ -1,0 +1,9 @@
+{# 「車両に割当」ボタン（キャンセル時にこの状態に戻る） #}
+<button type="button"
+        hx-get="{% url 'productions:production_vehicle_assignment_assign' assignment.pk %}"
+        hx-target="#assign-area-{{ assignment.pk }}"
+        hx-swap="innerHTML"
+        class="w-full inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors">
+  <i class="fa-solid fa-truck-fast"></i>
+  車両に割当
+</button>

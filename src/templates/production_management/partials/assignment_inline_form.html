@@ -1,0 +1,69 @@
+{# インライン割当フォーム（#assign-area-<pk> に注入される） #}
+<form hx-post="{% url 'productions:production_vehicle_assignment_assign' assignment.pk %}"
+      hx-target="#assign-area-{{ assignment.pk }}"
+      hx-swap="innerHTML">
+  {% csrf_token %}
+  <div class="space-y-2 py-1">
+
+    {# 管理配車時間 / 管理到着時間 #}
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        <label class="block text-[10px] font-bold text-gray-500 mb-0.5">管理配車時間</label>
+        {{ form.arranged_departure_time }}
+        {% if form.arranged_departure_time.errors %}
+          {% for e in form.arranged_departure_time.errors %}
+            <p class="text-[10px] text-red-500 mt-0.5">{{ e }}</p>
+          {% endfor %}
+        {% endif %}
+      </div>
+      <div>
+        <label class="block text-[10px] font-bold text-gray-500 mb-0.5">管理到着時間</label>
+        {{ form.arranged_arrival_time }}
+        {% if form.arranged_arrival_time.errors %}
+          {% for e in form.arranged_arrival_time.errors %}
+            <p class="text-[10px] text-red-500 mt-0.5">{{ e }}</p>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+
+    {# 車両 #}
+    <div>
+      <label class="block text-[10px] font-bold text-gray-500 mb-0.5">車両</label>
+      {{ form.assigned_vehicle }}
+      {% if form.assigned_vehicle.errors %}
+        {% for e in form.assigned_vehicle.errors %}
+          <p class="text-[10px] text-red-500 mt-0.5">{{ e }}</p>
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    {# 状態 #}
+    <div>
+      <label class="block text-[10px] font-bold text-gray-500 mb-0.5">状態</label>
+      {{ form.status }}
+    </div>
+
+    {# 非フィールドエラー #}
+    {% if form.non_field_errors %}
+      <div class="rounded-lg bg-red-50 px-2 py-1.5 text-[10px] text-red-600">
+        {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+      </div>
+    {% endif %}
+
+    {# ボタン #}
+    <div class="flex gap-2 pt-1">
+      <button type="submit"
+              class="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors">
+        保存
+      </button>
+      <button type="button"
+              hx-get="{% url 'productions:production_vehicle_assignment_assign_cancel' assignment.pk %}"
+              hx-target="#assign-area-{{ assignment.pk }}"
+              hx-swap="innerHTML"
+              class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+        ✕
+      </button>
+    </div>
+  </div>
+</form>

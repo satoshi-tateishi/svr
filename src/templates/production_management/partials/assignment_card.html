@@ -1,0 +1,38 @@
+{# 右ペイン: 工程カード #}
+{# 使用変数: assignment (VehicleAssignment) #}
+{% with vr=assignment.vehicle_request %}
+<div class="px-3 py-2">
+  <div class="flex items-start justify-between gap-1">
+    <div class="min-w-0 flex-1 space-y-0.5 text-xs">
+      <div class="truncate leading-tight">
+        {% if vr.route_from %}
+          <span class="text-gray-400">{{ vr.route_from }}</span>
+          <i class="fa-solid fa-arrow-right text-gray-300 mx-0.5" style="font-size:9px"></i>
+        {% endif %}
+        <span class="font-bold text-gray-900">{{ vr.route_to|default:"—" }}</span>
+      </div>
+      <div class="text-[11px] text-gray-400 truncate">{{ vr.effective_production.title|default:"—" }}</div>
+    </div>
+    {# 状態バッジ + 編集ボタン #}
+    <div class="flex flex-col items-end gap-1 flex-none">
+      {% if assignment.status == 'confirmed' %}
+        <span class="px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-bold text-[10px]">確定</span>
+      {% elif assignment.status == 'reviewing' %}
+        <span class="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold text-[10px]">調整中</span>
+      {% else %}
+        <span class="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-bold text-[10px]">未対応</span>
+      {% endif %}
+      {# インライン編集 (HTMX) #}
+      <div id="assign-area-{{ assignment.pk }}">
+        <button type="button"
+                hx-get="{% url 'productions:production_vehicle_assignment_assign' assignment.pk %}"
+                hx-target="#assign-area-{{ assignment.pk }}"
+                hx-swap="innerHTML"
+                class="text-[10px] text-gray-300 hover:text-indigo-400 transition-colors">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endwith %}

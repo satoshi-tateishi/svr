@@ -97,6 +97,12 @@ class ProcessDayForm(forms.ModelForm):
 
 
 class VehicleAssignmentForm(forms.ModelForm):
+    """車両手配フォーム（per-production モーダル用）
+
+    arranged_departure/arrival_time は含めない。
+    VehicleAssignmentEditView で使用しており、新フィールドの誤上書きを防ぐ。
+    """
+
     class Meta:
         model = VehicleAssignment
         fields = ['status', 'assigned_vehicle', 'note']
@@ -106,6 +112,33 @@ class VehicleAssignmentForm(forms.ModelForm):
             'note': forms.Textarea(
                 attrs={'rows': 3, 'placeholder': '管理メモ（任意）', 'class': _CSS_TEXTAREA}
             ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['assigned_vehicle'].queryset = Vehicle.objects.filter(is_active=True).order_by(
+            'order', 'name'
+        )
+        self.fields['assigned_vehicle'].empty_label = '--- 未設定 ---'
+
+
+class VehicleAssignmentAssignForm(forms.ModelForm):
+    """車両割当フォーム（配車編集UI のインライン割当用）"""
+
+    class Meta:
+        model = VehicleAssignment
+        fields = ['arranged_departure_time', 'arranged_arrival_time', 'status', 'assigned_vehicle']
+        widgets = {
+            'arranged_departure_time': forms.TimeInput(
+                format='%H:%M',
+                attrs={'type': 'time', 'class': _CSS_INPUT},
+            ),
+            'arranged_arrival_time': forms.TimeInput(
+                format='%H:%M',
+                attrs={'type': 'time', 'class': _CSS_INPUT},
+            ),
+            'status': forms.Select(attrs={'class': _CSS_SELECT}),
+            'assigned_vehicle': forms.Select(attrs={'class': _CSS_SELECT}),
         }
 
     def __init__(self, *args, **kwargs):

@@ -143,7 +143,7 @@ class TestProductionActiveRoutes:
         list_response = client.get(reverse('productions:production_vehicle_assignments'))
         edit_response = client.get(
             reverse(
-                'productions:production_vehicle_assignment_edit',
+                'productions:vehicle_assignment_edit',
                 kwargs={'pk': self.vehicle_request.pk},
             ),
             HTTP_HX_REQUEST='true',

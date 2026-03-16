@@ -1,0 +1,60 @@
+{# 右ペイン: 車両レーン (運行工程編集領域) #}
+{# 使用変数: lane = { vehicle: Vehicle, trips: [...] } #}
+<div class="w-60 flex-none">
+  {# 車両ヘッダー #}
+  <div class="mb-2 px-3 py-2.5 bg-gray-900 rounded-xl flex items-center gap-2">
+    <i class="fa-solid fa-van-shuttle text-gray-400 text-xs"></i>
+    <span class="font-bold text-white text-sm flex-1 truncate">{{ lane.vehicle.name }}</span>
+    <span class="text-[11px] text-gray-400 flex-none">{{ lane.trips|length }}便</span>
+  </div>
+
+  {# 便リスト + ドロップゾーン #}
+  <div class="space-y-2">
+
+    {# 既存の便ごとのドロップゾーン #}
+    {% for trip in lane.trips %}
+      <div class="bg-white rounded-xl overflow-hidden border {% if trip.departure_time %}border-indigo-200{% else %}border-gray-200{% endif %}">
+        {# 便ヘッダー #}
+        <div class="px-3 py-2 flex items-center gap-1.5 {% if trip.departure_time %}bg-indigo-50{% else %}bg-gray-50{% endif %}">
+          {% if trip.departure_time %}
+            <i class="fa-solid fa-clock text-indigo-300 text-xs"></i>
+            <span class="font-black text-indigo-900 tabular-nums text-sm">{{ trip.departure_time|time:"H:i" }}</span>
+            <span class="text-xs text-indigo-400">便</span>
+            {% if trip.arrival_time %}
+              <span class="ml-auto text-[11px] text-indigo-400 tabular-nums">→ {{ trip.arrival_time|time:"H:i" }}</span>
+            {% endif %}
+          {% else %}
+            <i class="fa-regular fa-clock text-gray-300 text-xs"></i>
+            <span class="text-xs font-bold text-gray-400">時間未定</span>
+          {% endif %}
+        </div>
+
+        {# 既存便ドロップゾーン: 工程カード + 同便追加エリア #}
+        <div class="trip-drop-zone"
+             data-vehicle-id="{{ lane.vehicle.pk }}"
+             data-insert-mode="existing_trip"
+             data-trip-departure="{{ trip.departure_time|time:'H:i'|default:'' }}">
+          <div class="divide-y divide-gray-50">
+            {% for a in trip.items %}
+              {% include "production_management/partials/assignment_card.html" with assignment=a %}
+            {% endfor %}
+          </div>
+          <div class="px-3 py-2 text-[11px] text-gray-300 text-center">
+            ここにドロップで同便化
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+
+    {# 新規便ドロップゾーン (常に最下部) #}
+    <div class="trip-drop-zone new-trip-zone rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-6 text-center"
+         data-vehicle-id="{{ lane.vehicle.pk }}"
+         data-insert-mode="new_trip"
+         data-trip-departure="">
+      <i class="fa-solid fa-plus text-gray-200 block mb-1"></i>
+      <p class="text-[11px] text-gray-400 font-bold">新規便として追加</p>
+      <p class="text-[10px] text-gray-300 mt-0.5">カードの管理時間を使用</p>
+    </div>
+
+  </div>
+</div>

@@ -408,6 +408,7 @@ class VehicleRequest(models.Model):
     route_from = models.CharField(max_length=200, blank=True, default='', verbose_name='出発地')
     route_to = models.CharField(max_length=200, blank=True, default='', verbose_name='目的地')
     note = models.TextField(blank=True, default='', verbose_name='備考')
+    is_manager_added = models.BooleanField(default=False, verbose_name='管理側追加便')
     # 荷役人数申請（車両申請がある場合のみ有効）
     loading_qty = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='荷積み人数')
     loading_include_self = models.BooleanField(default=False, verbose_name='荷積み本人含む')
@@ -481,7 +482,12 @@ class VehicleAssignment(models.Model):
         default=Status.PENDING,
         verbose_name='管理状態',
     )
+    # arranged_time を廃止し、出発・到着の2フィールドに分離
+    arranged_departure_time = models.TimeField(null=True, blank=True, verbose_name='管理配車時間')
+    arranged_arrival_time = models.TimeField(null=True, blank=True, verbose_name='管理到着時間')
     note = models.TextField(blank=True, default='', verbose_name='管理メモ')
+    departure_note = models.TextField(blank=True, default='', verbose_name='管理備考（配車）')
+    arrival_note = models.TextField(blank=True, default='', verbose_name='管理備考（到着）')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

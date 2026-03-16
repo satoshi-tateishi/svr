@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}{{ target_date|date:"Y年n月j日" }} 配車編集 | svr{% endblock %}
+{% block main_class %}!max-w-none px-6{% endblock %}
+
+{% block content %}
+
+{# Alpine.js 初期データ (Django→JS ブリッジ) #}
+<script>
+const INITIAL_LANES = [
+  {% for item in placed_items %}
+  {
+    pk: {{ item.pk }},
+    leg: 'dep',
+    time: "{{ item.arranged_departure_time|time:'H:i'|default:'' }}",
+    location: "{{ item.vehicle_request.route_from|escapejs }}",
+    production: "{{ item.vehicle_request.effective_production.title|default:''|escapejs }}",
+    processType: "{% if item.vehicle_request.effective_process_type %}{{ item.vehicle_request.effective_process_type.name|escapejs }}{% endif %}",
+    requestKind: "{{ item.vehicle_request.get_request_kind_display|escapejs }}",
+    requestedTime: "{{ item.vehicle_request.requested_time|time:'H:i'|default:'' }}",
+    requestNote: "{{ item.vehicle_request.note|escapejs }}",
+    managerNote: "{{ item.departure_note|escapejs }}"
+  },
+  {
+    pk: {{ item.pk }},
+    leg: 'arr',
+    time: "{{ item.arranged_arrival_time|time:'H:i'|default:'' }}",
+    location: "{{ item.vehicle_request.route_to|default:'—'|escapejs }}",
+    production: "{{ item.vehicle_request.effective_production.title|default:''|escapejs }}",
+    processType: "{% if item.vehicle_request.effective_process_type %}{{ item.vehicle_request.effective_process_type.name|escapejs }}{% endif %}",
+    requestKind: "{{ item.vehicle_request.get_request_kind_display|escapejs }}",
+    requestedTime: "{{ item.vehicle_request.arrival_requested_time|time:'H:i'|default:'' }}",
+    requestNote: "{{ item.vehicle_request.note|escapejs }}",
+    managerNote: "{{ item.arrival_note|escapejs }}"
+  }{% if not forloop.last %},{% endif %}
+  {% endfor %}
+];
+const INITIAL_ASSIGNED_PKS = [{% for pk in placed_pks %}{{ pk }}{% if not forloop.last %},{% endif %}{% endfor %}];
+const DEFAULT_VEHICLE_ID = '{{ default_vehicle_id }}';
+</script>
+
+<div x-data="vehicleEditor()" x-init="init()">
+
+  {# ── ヘッダー ── #}
+  <div class="mb-4 flex items-center gap-4">
+    <a href="{% url 'productions:production_vehicle_assignments' %}"
+       class="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-100 text-gray-400 hover:text-indigo-600">
+      <i class="fa-solid fa-chevron-left"></i>
+    </a>
+    <div>
+      <h1 class="text-xl font-bold text-gray-900">{{ target_date|date:"Y年n月j日" }} の配車編集</h1>
+      <p class="text-xs text-gray-500">申請を工程レーンへドラッグして運行計画を組んでください。</p>
+    </div>
+  </div>
+
+  <div class="flex gap-6 items-start" style="height: calc(100vh - 9rem)">
+
+    {# ── 左ペイン: 申請一覧 ── #}
+    <div class="w-72 flex-none flex flex-col h-full">
+      <div class="mb-3 flex items-center gap-2 flex-none">
+        <h2 class="text-sm font-black text-gray-700">申請一覧</h2>
+        <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-bold">{{ all_items|length }}件</span>
+        <div class="flex-1 border-t border-gray-200"></div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-2 pr-1">
+        {% for item in all_items %}
+          {% include "production_management/partials/request_card.html" with assignment=item %}
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ── 右ペイン: 工程レーン ── #}
+    <div class="flex-1 flex flex-col h-full min-w-0">
+
+      {# 車両選択 #}
+      <div class="mb-3 flex items-center gap-3 flex-none">
+        <label class="text-xs font-bold text-gray-500 flex-none">担当車両</label>
+        <select x-model="selectedVehicleId"
+                class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-700">
+          <option value="">-- 車両を選択 --</option>
+          {% for v in vehicles %}
+          <option value="{{ v.pk }}">{{ v.name }}</option>
+          {% endfor %}
+        </select>
+        <template x-if="!selectedVehicleId">
+          <span class="text-xs text-amber-500 font-bold">車両を選択するとDnD配置できます</span>
+        </template>
+      </div>
+
+      <div class="mb-3 flex items-center gap-2 flex-none">
+        <h2 class="text-sm font-black text-gray-700">運行工程</h2>
+        <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-bold">
+          <span x-text="lanes.length + '行'"></span>
+        </span>
+        <div class="flex-1 border-t border-gray-200"></div>
+      </div>
+
+      {# ドロップゾーン #}
+      <div class="flex-1 rounded-xl border-2 overflow-hidden flex flex-col transition-colors"
+           :class="dragOver ? 'border-indigo-300 bg-indigo-50/30' : 'border-dashed border-gray-200 bg-gray-50/30'"
+           @dragover.prevent="dragOver = true"
+           @dragleave="dragOver = false"
+           @drop.prevent="onDrop($event)">
+
+        {# テーブルヘッダー #}
+        <div class="px-4 py-2 bg-white border-b border-gray-100 flex items-center gap-3 text-[11px] font-bold text-gray-400 flex-none">
+          <span class="w-20 flex-none">申請時間</span>
+          <span class="w-28 flex-none">管理時間</span>
+          <span class="w-32 flex-none">場所</span>
+          <span class="flex-1">備考</span>
+          <span class="w-6 flex-none"></span>
+        </div>
+
+        {# 工程行リスト #}
+        <div class="flex-1 overflow-y-auto">
+
+          <template x-if="lanes.length === 0">
+            <div class="flex flex-col items-center justify-center py-24 text-gray-300">
+              <i class="fa-solid fa-arrow-left text-3xl mb-3"></i>
+              <p class="text-sm font-bold">左の申請をここへドラッグ</p>
+              <p class="text-xs mt-1">配車・到着の2行に分解されます</p>
+            </div>
+          </template>
+
+          <template x-for="(row, index) in lanes" :key="row.pk + '-' + row.leg">
+            <div>
+
+            {# 時刻変化点: ↓ 移動矢印 #}
+            <div x-show="index > 0 && lanes[index - 1].time !== row.time"
+                 class="flex items-center gap-3 px-6 py-2">
+              <div class="flex-1 border-t-2 border-dashed border-gray-400"></div>
+              <i class="fa-solid fa-arrow-down text-gray-600 text-xl"></i>
+              <div class="flex-1 border-t-2 border-dashed border-gray-400"></div>
+            </div>
+
+            <div class="px-4 py-2.5 bg-white flex items-center gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100">
+
+              {# 申請時間 (表示のみ) #}
+              <div class="w-20 flex-none">
+                <span class="text-sm tabular-nums text-gray-500 px-2 py-1.5 block"
+                      x-text="row.requestedTime || '—'"></span>
+              </div>
+
+              {# 管理時間 input #}
+              <div class="w-28 flex-none">
+                <input type="time"
+                       :value="row.time"
+                       @blur="updateTime(row.pk, row.leg, $event.target.value)"
+                       @keydown.enter="$event.target.blur()"
+                       class="w-full text-base tabular-nums font-bold border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2"
+                       :class="row.leg === 'dep' ? 'text-indigo-700 focus:ring-indigo-300' : 'text-emerald-700 focus:ring-emerald-300'">
+              </div>
+
+              {# 場所 + バッジ #}
+              <div class="w-32 flex-none min-w-0">
+                <span class="text-sm font-bold text-gray-800 truncate block" x-text="row.location || '—'"></span>
+                <div class="mt-0.5 flex flex-col gap-0.5">
+                  <div>
+                    <template x-if="row.leg === 'dep'">
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 text-[10px] font-bold"
+                            x-text="row.requestKind === '搬入' ? '荷積み' : '配車'"></span>
+                    </template>
+                    <template x-if="row.leg === 'arr'">
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-bold"
+                            x-text="row.requestKind === '搬入' ? '荷降ろし' : '到着'"></span>
+                    </template>
+                  </div>
+                  <span class="text-[11px] font-bold text-indigo-700 truncate" x-text="row.production"></span>
+                </div>
+              </div>
+
+              {# 備考カラム #}
+              <div class="flex-1 min-w-0 flex flex-col gap-1">
+                {# 上段: 申請側備考（表示のみ）#}
+                <template x-if="row.requestNote">
+                  <div class="text-[11px] text-gray-500 bg-gray-50 rounded px-2 py-1 leading-tight">
+                    <span class="font-bold text-gray-300 mr-1">申請</span>
+                    <span x-text="row.requestNote"></span>
+                  </div>
+                </template>
+                <template x-if="!row.requestNote">
+                  <div class="text-[11px] text-gray-300 italic px-1">申請備考なし</div>
+                </template>
+                {# 下段: 管理側備考（入力）#}
+                <textarea rows="3"
+                          x-model="row.managerNote"
+                          @blur="updateNote(row.pk, row.leg, row.managerNote)"
+                          placeholder="管理備考…"
+                          class="w-full text-[11px] border border-gray-200 rounded px-2 py-1 text-gray-700 resize-none focus:outline-none focus:ring-1"
+                          :class="row.leg === 'dep' ? 'focus:ring-indigo-300' : 'focus:ring-emerald-300'"></textarea>
+              </div>
+
+              {# 削除ボタン #}
+              <button type="button"
+                      @click="deleteAssignment(row.pk)"
+                      class="w-6 h-6 flex-none flex items-center justify-center rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors">
+                <i class="fa-solid fa-xmark text-xs"></i>
+              </button>
+
+            </div>{# /行本体 #}
+            </div>{# /ラッパー #}
+          </template>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function laneSort(a, b) {
+  if (!a.time && !b.time) {
+    if (a.leg !== b.leg) return a.leg === 'dep' ? -1 : 1;
+    return a.pk - b.pk;
+  }
+  if (!a.time) return 1;
+  if (!b.time) return -1;
+  const cmp = a.time.localeCompare(b.time);
+  if (cmp !== 0) return cmp;
+  if (a.leg !== b.leg) return a.leg === 'dep' ? -1 : 1;
+  return a.pk - b.pk;
+}
+
+function vehicleEditor() {
+  return {
+    assignedPks: [...INITIAL_ASSIGNED_PKS],
+    selectedVehicleId: DEFAULT_VEHICLE_ID,
+    lanes: INITIAL_LANES.slice().sort(laneSort),
+    dragOver: false,
+
+    init() {},
+
+    isAssigned(pk) {
+      return this.assignedPks.includes(pk);
+    },
+
+    startDrag(event, pk) {
+      if (this.isAssigned(pk)) { event.preventDefault(); return; }
+      event.dataTransfer.effectAllowed = 'copy';
+      event.dataTransfer.setData('text/plain', String(pk));
+    },
+
+    onDrop(event) {
+      this.dragOver = false;
+      if (!this.selectedVehicleId) return;
+
+      const pk = parseInt(event.dataTransfer.getData('text/plain'));
+      if (!pk || this.isAssigned(pk)) return;
+
+      const card = document.querySelector('[data-pk="' + pk + '"]');
+      if (!card) return;
+
+      const common = {
+        pk,
+        production: card.dataset.production || '',
+        processType: card.dataset.processType || '',
+        requestKind: card.dataset.requestKind || '',
+        requestNote: card.dataset.note || '',
+        managerNote: '',
+      };
+      const depTime = card.dataset.requestedTime || '';
+      const arrTime = card.dataset.arrivalRequested || '';
+
+      this.assignedPks.push(pk);
+      this.lanes.push({ ...common, leg: 'dep', time: depTime, location: card.dataset.routeFrom || '', requestedTime: depTime });
+      this.lanes.push({ ...common, leg: 'arr', time: arrTime, location: card.dataset.routeTo || '', requestedTime: arrTime });
+      this.sortLanes();
+      this.postAssign(pk, depTime, arrTime);
+    },
+
+    updateTime(pk, leg, value) {
+      const row = this.lanes.find(l => l.pk === pk && l.leg === leg);
+      if (!row) return;
+      row.time = value;
+      this.sortLanes();
+      this.postTime(pk, leg, value);
+    },
+
+    updateNote(pk, leg, value) {
+      this.post('/productions/dashboard/vehicle-assignments/' + pk + '/dnd-assign/', { leg, note: value });
+    },
+
+    deleteAssignment(pk) {
+      this.lanes = this.lanes.filter(l => l.pk !== pk);
+      this.assignedPks = this.assignedPks.filter(p => p !== pk);
+      this.postRemove(pk);
+    },
+
+    sortLanes() {
+      this.lanes.sort(laneSort);
+    },
+
+    postAssign(pk, depTime, arrTime) {
+      this.post('/productions/dashboard/vehicle-assignments/' + pk + '/dnd-assign/', {
+        vehicle_id: this.selectedVehicleId,
+        arranged_departure_time: depTime,
+        arranged_arrival_time: arrTime,
+      });
+    },
+
+    postTime(pk, leg, time) {
+      this.post('/productions/dashboard/vehicle-assignments/' + pk + '/dnd-assign/', { leg, time });
+    },
+
+    postRemove(pk) {
+      this.post('/productions/dashboard/vehicle-assignments/' + pk + '/dnd-remove/', {});
+    },
+
+    post(url, data) {
+      const params = new URLSearchParams({ ...data, csrfmiddlewaretoken: this.getCsrf() });
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+    },
+
+    getCsrf() {
+      const m = document.cookie.match(/csrftoken=([^;]+)/);
+      return m ? m[1] : '';
+    },
+  };
+}
+</script>
+{% endblock %}

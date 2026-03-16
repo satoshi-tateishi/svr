@@ -18,6 +18,7 @@ from apps.performances.services.dashboard_query_service import DashboardQuerySer
 from .forms import (
     ProductionForm,
     ProductionMemberForm,
+    VehicleAssignmentAssignForm,
     VehicleAssignmentForm,
 )
 from .mixins import (
@@ -977,7 +978,7 @@ _OUTBOUND_KINDS = ['loading', 'unloading', 'pickup']
 
 @login_required(login_url='accounts:login')
 def production_vehicle_assignment_dashboard(request):
-    """Production 横断の配車計画ボード（primary_time 順）"""
+    """配車手配一覧（確認用）: 日付・手配時間グループで俯瞰する"""
     from itertools import groupby
 
     from django.db.models import BooleanField, Case, F, TimeField, When
@@ -1002,7 +1003,7 @@ def production_vehicle_assignment_dashboard(request):
             ignore_conflicts=True,
         )
 
-    # annotate: effective_date / is_outbound / primary_time / secondary_time を DB 計算
+    # annotate: effective_date / is_outbound / primary_time（申請時間） を DB 計算
     assignments = (
         VehicleAssignment.objects.select_related(
             'vehicle_request__process_day__process__production',
@@ -1031,53 +1032,43 @@ def production_vehicle_assignment_dashboard(request):
                 default=F('vehicle_request__arrival_requested_time'),
                 output_field=TimeField(),
             ),
-            secondary_time=Case(
-                When(
-                    vehicle_request__request_kind__in=_OUTBOUND_KINDS,
-                    then=F('vehicle_request__arrival_requested_time'),
-                ),
-                default=F('vehicle_request__requested_time'),
-                output_field=TimeField(),
+            # 管理配車時間 > 申請時間 の優先順位でソート。両方 null は最後尾（NULLS LAST）
+            effective_sort_time=Coalesce(
+                'arranged_departure_time', 'vehicle_request__requested_time'
             ),
         )
         .order_by(
             F('effective_date_db').asc(nulls_last=True),
-            F('primary_time').asc(nulls_last=True),
+            F('effective_sort_time').asc(nulls_last=True),
             'vehicle_request__route_to',
             'pk',
         )
     )
 
-    # Python 側でラベル付与
-    all_assignments = list(assignments)
-    for a in all_assignments:
-        if a.is_outbound:
-            a.primary_label = '配車'
-            a.secondary_label = '到着'
-        else:
-            a.primary_label = '到着'
-            a.secondary_label = '配車'
-
-    # Python 側で日付グルーピング
+    # Python 側で日付 → 手配時間グループに二段グルーピング
     dashboard_days = []
-    for date_key, group in groupby(all_assignments, key=lambda a: a.effective_date_db):
-        items = list(group)
+    for date_key, date_group in groupby(list(assignments), key=lambda a: a.effective_date_db):
+        items = list(date_group)
         Status = VehicleAssignment.Status
 
-        # NOTE: 第1段階の定義として assigned_vehicle is None を未手配とみなす。
-        # 今後「調整中（reviewing）だが車両未確定」をどう扱うか再検討の余地あり。
-        unassigned_items = [a for a in items if a.assigned_vehicle is None]
-        assigned_items = [a for a in items if a.assigned_vehicle is not None]
+        # 管理配車時間グループ（arranged_departure_time が同じものをまとめる。None は「時間未定」）
+        # groupby は連続同一キーのみグループ化するため、事前に arranged_departure_time で再ソート
+        import datetime as _dt
 
-        # assigned_vehicle ごとに運行レーンを構築（primary_time 順はソート済みを維持）
-        lanes_dict: dict = {}
-        for a in assigned_items:
-            v = a.assigned_vehicle
-            if v.pk not in lanes_dict:
-                lanes_dict[v.pk] = {'vehicle': v, 'items': []}
-            lanes_dict[v.pk]['items'].append(a)
-        lanes = list(lanes_dict.values())
+        items_for_group = sorted(
+            items,
+            key=lambda a: (
+                a.arranged_departure_time is None,
+                a.arranged_departure_time
+                if a.arranged_departure_time is not None
+                else _dt.time.max,
+            ),
+        )
+        time_groups = []
+        for dep_time, tg in groupby(items_for_group, key=lambda a: a.arranged_departure_time):
+            time_groups.append({'arranged_departure_time': dep_time, 'items': list(tg)})
 
+        edit_date = date_key.isoformat() if date_key else None
         dashboard_days.append(
             {
                 'date': date_key,
@@ -1087,8 +1078,8 @@ def production_vehicle_assignment_dashboard(request):
                     'reviewing_count': sum(1 for a in items if a.status == Status.REVIEWING),
                     'confirmed_count': sum(1 for a in items if a.status == Status.CONFIRMED),
                 },
-                'unassigned_items': unassigned_items,
-                'lanes': lanes,
+                'time_groups': time_groups,
+                'edit_date': edit_date,
             }
         )
 
@@ -1100,37 +1091,281 @@ def production_vehicle_assignment_dashboard(request):
 
 
 @login_required(login_url='accounts:login')
-def production_vehicle_assignment_edit(request, pk):
-    """Production 横断の車両手配編集モーダル"""
+def production_vehicle_assignment_day_edit(request, date_str):
+    """配車手配編集（車両レーン方式）: 未割当タスクを車両レーンに割当てる"""
+    import datetime as dt
+
+    from django.db.models import Case, F, TimeField, When
+    from django.db.models.functions import Coalesce
+
     from .services.permissions import can_manage_assignments
 
     if not can_manage_assignments(request.user):
         return HttpResponseForbidden('手配管理の権限がありません。')
 
-    vr = get_object_or_404(VehicleRequest, pk=pk)
-    assignment, _ = VehicleAssignment.objects.get_or_create(vehicle_request=vr)
+    try:
+        target_date = dt.date.fromisoformat(date_str)
+    except ValueError:
+        return HttpResponseForbidden('日付の形式が不正です。')
+
+    # その日の VehicleRequest に対応する VehicleAssignment を自動生成（初回アクセス対応）
+    day_vr_ids = list(
+        VehicleRequest.objects.annotate(
+            eff_date=Coalesce(
+                'date',
+                'process_request_unit__work_date',
+                'process_day__date',
+            )
+        )
+        .filter(eff_date=target_date)
+        .values_list('pk', flat=True)
+    )
+    if day_vr_ids:
+        existing_ids = set(
+            VehicleAssignment.objects.filter(vehicle_request_id__in=day_vr_ids).values_list(
+                'vehicle_request_id', flat=True
+            )
+        )
+        missing = set(day_vr_ids) - existing_ids
+        if missing:
+            VehicleAssignment.objects.bulk_create(
+                [VehicleAssignment(vehicle_request_id=pk) for pk in missing],
+                ignore_conflicts=True,
+            )
+
+    # 指定日の VehicleAssignment を全件取得
+    assignments_list = list(
+        VehicleAssignment.objects.select_related(
+            'vehicle_request__process_day__process__production',
+            'vehicle_request__process_day__process_type',
+            'vehicle_request__process_request_unit__process__production',
+            'vehicle_request__process_request_unit__process_type',
+            'vehicle_request__requested_vehicle',
+            'assigned_vehicle',
+        )
+        .annotate(
+            effective_date_db=Coalesce(
+                'vehicle_request__date',
+                'vehicle_request__process_request_unit__work_date',
+                'vehicle_request__process_day__date',
+            ),
+            primary_time=Case(
+                When(
+                    vehicle_request__request_kind__in=_OUTBOUND_KINDS,
+                    then=F('vehicle_request__requested_time'),
+                ),
+                default=F('vehicle_request__arrival_requested_time'),
+                output_field=TimeField(),
+            ),
+        )
+        .filter(effective_date_db=target_date)
+    )
+
+    # 右ペイン: 配置済み（いずれかの時間が設定済み）
+    placed_items = [
+        a
+        for a in assignments_list
+        if a.arranged_departure_time is not None or a.arranged_arrival_time is not None
+    ]
+    placed_pks = [a.pk for a in placed_items]
+
+    # 左ペイン: 全件を申請時間順（null は末尾）
+    all_items = sorted(
+        assignments_list,
+        key=lambda a: (a.primary_time is None, a.primary_time),
+    )
+
+    # 車両リスト・デフォルト車両（新音車）
+    vehicles = list(Vehicle.objects.filter(is_active=True).order_by('order', 'name'))
+    default_vehicle = Vehicle.objects.filter(name='新音車', is_active=True).first()
+
+    return render(
+        request,
+        'production_management/production_vehicle_assignment_day_edit.html',
+        {
+            'target_date': target_date,
+            'all_items': all_items,
+            'placed_items': placed_items,
+            'placed_pks': placed_pks,
+            'vehicles': vehicles,
+            'default_vehicle_id': default_vehicle.pk if default_vehicle else '',
+        },
+    )
+
+
+def _build_vehicle_lanes(assigned_items):
+    """
+    割当済み VehicleAssignment を (車両順, 便時間順) で構造化する。
+
+    NOTE: trip.arrival_time は便内1件目の arranged_arrival_time を代表値とする。
+    同便内で異なる到着時間を持つ可能性があるが、表示上の参考値として許容する。
+    """
+    import datetime as dt
+    from itertools import groupby
+
+    # 1回のソートで「車両順 → 便時間順 → pk順」を確立する
+    # groupby は連続した同一キーのみグループ化するため、事前ソートが必須
+    sorted_items = sorted(
+        assigned_items,
+        key=lambda a: (
+            a.assigned_vehicle.order if a.assigned_vehicle.order is not None else 9999,
+            a.assigned_vehicle.name,
+            a.arranged_departure_time is None,  # False が先（時間あり優先）
+            a.arranged_departure_time if a.arranged_departure_time is not None else dt.time.max,
+            a.pk,
+        ),
+    )
+
+    lanes = []
+    for _vid, vehicle_grp in groupby(sorted_items, key=lambda a: a.assigned_vehicle_id):
+        vehicle_items = list(vehicle_grp)
+        vehicle_obj = vehicle_items[0].assigned_vehicle
+
+        # 各車両グループ内は既に departure_time 順にソート済み
+        trips = []
+        for dep_time, trip_grp in groupby(vehicle_items, key=lambda a: a.arranged_departure_time):
+            trip_items = list(trip_grp)
+            trips.append(
+                {
+                    'departure_time': dep_time,
+                    'arrival_time': trip_items[0].arranged_arrival_time,  # 代表値: 1件目
+                    'items': trip_items,
+                }
+            )
+
+        lanes.append({'vehicle': vehicle_obj, 'trips': trips})
+
+    return lanes
+
+
+@login_required(login_url='accounts:login')
+def production_vehicle_assignment_assign(request, pk):
+    """インライン割当フォーム（HTMX: GET=フォーム展開 / POST=保存）"""
+    from .services.permissions import can_manage_assignments
+
+    if not can_manage_assignments(request.user):
+        return HttpResponseForbidden('手配管理の権限がありません。')
+
+    assignment = get_object_or_404(VehicleAssignment, pk=pk)
 
     if request.method == 'POST':
-        form = VehicleAssignmentForm(request.POST, instance=assignment)
+        form = VehicleAssignmentAssignForm(request.POST, instance=assignment)
         if form.is_valid():
             form.save()
             response = HttpResponse()
-            response['HX-Redirect'] = reverse('productions:production_vehicle_assignments')
+            response['HX-Refresh'] = 'true'
             return response
         return render(
             request,
-            'production_management/production_vehicle_assignment_form.html',
-            {
-                'vr': vr,
-                'assignment': assignment,
-                'form': form,
-                'error_message': 'エラーが発生しました。入力内容を確認してください。',
-            },
+            'production_management/partials/assignment_inline_form.html',
+            {'form': form, 'assignment': assignment},
         )
 
-    form = VehicleAssignmentForm(instance=assignment)
+    form = VehicleAssignmentAssignForm(instance=assignment)
     return render(
         request,
-        'production_management/production_vehicle_assignment_form.html',
-        {'vr': vr, 'assignment': assignment, 'form': form},
+        'production_management/partials/assignment_inline_form.html',
+        {'form': form, 'assignment': assignment},
+    )
+
+
+@login_required(login_url='accounts:login')
+def production_vehicle_assignment_dnd_assign(request, pk):
+    """DnD割当 POST: leg='dep'/'arr' で片方のみ更新可能"""
+    from .services.permissions import can_manage_assignments
+
+    if not can_manage_assignments(request.user):
+        return HttpResponseForbidden('手配管理の権限がありません。')
+    if request.method != 'POST':
+        return HttpResponseForbidden()
+
+    assignment = get_object_or_404(VehicleAssignment, pk=pk)
+    leg = request.POST.get('leg')
+
+    if leg == 'dep':
+        update_fields = []
+        time_val = request.POST.get('time')
+        if time_val is not None:  # time が送られたときだけ時間を更新
+            assignment.arranged_departure_time = time_val or None
+            update_fields.append('arranged_departure_time')
+        note_val = request.POST.get('note')
+        if note_val is not None:  # note が送られたときだけ備考を更新
+            assignment.departure_note = note_val
+            update_fields.append('departure_note')
+        if update_fields:
+            assignment.save(update_fields=update_fields)
+    elif leg == 'arr':
+        update_fields = []
+        time_val = request.POST.get('time')
+        if time_val is not None:
+            assignment.arranged_arrival_time = time_val or None
+            update_fields.append('arranged_arrival_time')
+        note_val = request.POST.get('note')
+        if note_val is not None:
+            assignment.arrival_note = note_val
+            update_fields.append('arrival_note')
+        if update_fields:
+            assignment.save(update_fields=update_fields)
+    else:
+        # 後方互換（旧呼び出し形式）
+        vehicle_id = request.POST.get('vehicle_id') or None
+        departure = request.POST.get('arranged_departure_time') or None
+        arrival = request.POST.get('arranged_arrival_time') or None
+        if vehicle_id:
+            assignment.assigned_vehicle = get_object_or_404(Vehicle, pk=vehicle_id, is_active=True)
+        else:
+            assignment.assigned_vehicle = None
+        assignment.arranged_departure_time = departure
+        assignment.arranged_arrival_time = arrival
+        assignment.save(
+            update_fields=['assigned_vehicle', 'arranged_departure_time', 'arranged_arrival_time']
+        )
+
+    return HttpResponse(status=200)
+
+
+@login_required(login_url='accounts:login')
+def production_vehicle_assignment_dnd_remove(request, pk):
+    """DnD削除: leg='dep'/'arr' で片方のみクリア、未指定は両方クリア"""
+    from .services.permissions import can_manage_assignments
+
+    if not can_manage_assignments(request.user):
+        return HttpResponseForbidden('手配管理の権限がありません。')
+    if request.method != 'POST':
+        return HttpResponseForbidden()
+
+    assignment = get_object_or_404(VehicleAssignment, pk=pk)
+
+    # leg 未指定: 時間・備考・車両を全てクリア（割当解除）
+    assignment.assigned_vehicle = None
+    assignment.arranged_departure_time = None
+    assignment.arranged_arrival_time = None
+    assignment.departure_note = ''
+    assignment.arrival_note = ''
+    assignment.save(
+        update_fields=[
+            'assigned_vehicle',
+            'arranged_departure_time',
+            'arranged_arrival_time',
+            'departure_note',
+            'arrival_note',
+        ]
+    )
+
+    return HttpResponse(status=200)
+
+
+@login_required(login_url='accounts:login')
+def production_vehicle_assignment_assign_cancel(request, pk):
+    """割当フォームキャンセル（HTMX: 元のボタン状態に戻す）"""
+    from .services.permissions import can_manage_assignments
+
+    if not can_manage_assignments(request.user):
+        return HttpResponseForbidden('手配管理の権限がありません。')
+
+    assignment = get_object_or_404(VehicleAssignment, pk=pk)
+    return render(
+        request,
+        'production_management/partials/assign_button.html',
+        {'assignment': assignment},
     )

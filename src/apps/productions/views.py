@@ -655,7 +655,13 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
                             else ''
                         ),
                         'route_from': vehicle_request.route_from if vehicle_request else '',
+                        'location_from_id': (
+                            vehicle_request.location_from_id if vehicle_request else None
+                        ),
                         'route_to': vehicle_request.route_to if vehicle_request else '',
+                        'location_to_id': (
+                            vehicle_request.location_to_id if vehicle_request else None
+                        ),
                         'note': vehicle_request.note if vehicle_request else '',
                         'loading_qty': (
                             str(vehicle_request.loading_qty)
@@ -901,7 +907,9 @@ class ProcessBlockEditView(ProcessEditPermissionMixin, LoginRequiredMixin, View)
                     requested_time=vehicle_requested_time,
                     arrival_requested_time=arrival_requested_time,
                     route_from=(vehicle_data.get('route_from') or '').strip(),
+                    location_from_id=vehicle_data.get('location_from_id') or None,
                     route_to=(vehicle_data.get('route_to') or '').strip(),
+                    location_to_id=vehicle_data.get('location_to_id') or None,
                     note=(vehicle_data.get('note') or '').strip(),
                     loading_qty=loading_qty,
                     loading_include_self=bool(vehicle_data.get('loading_include_self', False)),

@@ -117,9 +117,40 @@
                       <label class="block text-[10px] font-bold text-gray-500 mb-1">配車希望時間</label>
                       <input type="time" x-model="unit.vehicle.requested_time" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
                     </div>
-                    <div>
+                    <div x-data="{
+                      open: false,
+                      results: [],
+                      search() {
+                        const q = unit.vehicle.route_from || '';
+                        if (q.length < 2) { this.open = false; this.results = []; return; }
+                        fetch('/locations/api/autocomplete/?q=' + encodeURIComponent(q))
+                          .then(r => r.json())
+                          .then(data => { this.results = data; this.open = data.length > 0; });
+                      },
+                      select(loc) {
+                        unit.vehicle.route_from = loc.name;
+                        unit.vehicle.location_from_id = loc.id;
+                        this.open = false;
+                        this.results = [];
+                      },
+                    }" class="relative">
                       <label class="block text-[10px] font-bold text-gray-500 mb-1">出発地</label>
-                      <input type="text" x-model="unit.vehicle.route_from" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2" placeholder="{% if block_key == 'rehearsal_strike' %}例: すみだ4St{% elif block_key == 'theatre_strike' %}例: パルコ劇場{% elif block_key == 'travel_unload' %}例: すみだ倉庫{% else %}例: 赤堤倉庫{% endif %}">
+                      <input type="text" x-model="unit.vehicle.route_from"
+                             @input.debounce.300ms="unit.vehicle.location_from_id = null; search()"
+                             @focus.debounce.200ms="search()"
+                             class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2"
+                             placeholder="{% if block_key == 'rehearsal_strike' %}例: すみだ4St{% elif block_key == 'theatre_strike' %}例: パルコ劇場{% elif block_key == 'travel_unload' %}例: すみだ倉庫{% else %}例: 赤堤倉庫{% endif %}">
+                      <ul x-show="open && results.length > 0"
+                          @mousedown.outside="open = false"
+                          class="absolute z-50 bg-white border border-gray-200 rounded-xl shadow-lg w-full mt-1 max-h-48 overflow-y-auto">
+                        <template x-for="loc in results" :key="loc.id">
+                          <li @mousedown.prevent="select(loc)"
+                              class="px-3 py-2 text-sm cursor-pointer hover:bg-indigo-50">
+                            <div class="font-medium text-gray-800" x-text="loc.name"></div>
+                            <div class="text-xs text-gray-400" x-text="loc.address"></div>
+                          </li>
+                        </template>
+                      </ul>
                     </div>
                     <div>
                       <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_strike' or block_key == 'theatre_strike' %}搬出{% elif block_key == 'travel_unload' %}旅荷降ろし{% else %}積み込み{% endif %}</label>
@@ -146,9 +177,40 @@
                       <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_setup' or block_key == 'theatre_setup' or block_key == 'travel_load' %}到着希望時間{% else %}倉庫到着予想時間{% endif %}</label>
                       <input type="time" x-model="unit.vehicle.arrival_requested_time" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2">
                     </div>
-                    <div>
+                    <div x-data="{
+                      open: false,
+                      results: [],
+                      search() {
+                        const q = unit.vehicle.route_to || '';
+                        if (q.length < 2) { this.open = false; this.results = []; return; }
+                        fetch('/locations/api/autocomplete/?q=' + encodeURIComponent(q))
+                          .then(r => r.json())
+                          .then(data => { this.results = data; this.open = data.length > 0; });
+                      },
+                      select(loc) {
+                        unit.vehicle.route_to = loc.name;
+                        unit.vehicle.location_to_id = loc.id;
+                        this.open = false;
+                        this.results = [];
+                      },
+                    }" class="relative">
                       <label class="block text-[10px] font-bold text-gray-500 mb-1">目的地</label>
-                      <input type="text" x-model="unit.vehicle.route_to" class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2" placeholder="{% if block_key == 'rehearsal_strike' or block_key == 'theatre_strike' or block_key == 'travel_unload' %}例: 赤堤倉庫{% elif block_key == 'travel_load' %}例: すみだ倉庫{% else %}例: すみだ4St{% endif %}">
+                      <input type="text" x-model="unit.vehicle.route_to"
+                             @input.debounce.300ms="unit.vehicle.location_to_id = null; search()"
+                             @focus.debounce.200ms="search()"
+                             class="form-input block w-full rounded-xl border-gray-200 text-sm focus:ring-indigo-500 py-2"
+                             placeholder="{% if block_key == 'rehearsal_strike' or block_key == 'theatre_strike' or block_key == 'travel_unload' %}例: 赤堤倉庫{% elif block_key == 'travel_load' %}例: すみだ倉庫{% else %}例: すみだ4St{% endif %}">
+                      <ul x-show="open && results.length > 0"
+                          @mousedown.outside="open = false"
+                          class="absolute z-50 bg-white border border-gray-200 rounded-xl shadow-lg w-full mt-1 max-h-48 overflow-y-auto">
+                        <template x-for="loc in results" :key="loc.id">
+                          <li @mousedown.prevent="select(loc)"
+                              class="px-3 py-2 text-sm cursor-pointer hover:bg-indigo-50">
+                            <div class="font-medium text-gray-800" x-text="loc.name"></div>
+                            <div class="text-xs text-gray-400" x-text="loc.address"></div>
+                          </li>
+                        </template>
+                      </ul>
                     </div>
                     <div>
                       <label class="block text-[10px] font-bold text-gray-500 mb-1">{% if block_key == 'rehearsal_strike' or block_key == 'theatre_strike' %}荷降ろし{% elif block_key == 'travel_unload' %}倉庫荷降ろし{% else %}搬入{% endif %}</label>

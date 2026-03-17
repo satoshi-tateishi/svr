@@ -1,88 +1,85 @@
-{# 左ペイン: 申請カード (全件表示。配置済みはグレーアウト) #}
+{# 左ペイン: 申請カード。1申請 = 1カード。カード下部に dep / arr の個別ドラッグハンドルを持つ #}
 {% with vr=assignment.vehicle_request %}
-<div class="rounded-xl border shadow-sm transition-opacity select-none"
+<div class="rounded-xl border shadow-sm bg-white select-none transition-opacity"
      data-pk="{{ assignment.pk }}"
      data-route-from="{{ vr.route_from }}"
      data-route-to="{{ vr.route_to|default:'' }}"
-     data-production="{{ vr.effective_production.title|default:'' }}"
-     data-process-type="{% if vr.effective_process_type %}{{ vr.effective_process_type.name }}{% endif %}"
-     data-request-kind="{{ vr.get_request_kind_display }}"
-     data-requested-time="{{ vr.requested_time|time:'H:i'|default:'' }}"
-     data-arrival-requested="{{ vr.arrival_requested_time|time:'H:i'|default:'' }}"
-     data-note="{{ vr.note|escapejs }}"
-     x-bind:class="isAssigned({{ assignment.pk }})
-       ? 'bg-gray-50 border-gray-100 opacity-50 cursor-not-allowed'
-       : 'bg-white border-gray-100 cursor-grab active:cursor-grabbing'"
-     x-bind:draggable="String(!isAssigned({{ assignment.pk }}))"
-     @dragstart="startDrag($event, {{ assignment.pk }})">
+     x-bind:class="isAssigned({{ assignment.pk }}) ? 'opacity-40 border-gray-100' : 'border-gray-100'">
 
-  <div class="px-3 pt-3 pb-3 flex gap-2">
-    <div class="flex items-start pt-0.5 text-gray-300 flex-none">
-      <i class="fa-solid fa-grip-vertical text-sm"></i>
-    </div>
-    <div class="flex-1 min-w-0 space-y-1.5">
+  {# 上部: 情報エリア（non-draggable）#}
+  <div class="px-3 pt-2.5 pb-2">
 
-      {# 時間行: 申請時間 (+ 管理時間が設定済みなら横並び) #}
-      <div class="flex items-center gap-2 text-xs tabular-nums flex-wrap">
-        {% if vr.requested_time %}
-          <span class="font-black text-gray-800">{{ vr.requested_time|time:"H:i" }}</span>
-          {% if assignment.arranged_departure_time %}
-            <i class="fa-solid fa-arrow-right text-indigo-300 text-[10px]"></i>
-            <span class="font-bold text-indigo-600">{{ assignment.arranged_departure_time|time:"H:i" }}</span>
-          {% endif %}
-          <span class="text-gray-400">配車</span>
-        {% endif %}
-        {% if vr.requested_time and vr.arrival_requested_time %}
-          <span class="text-gray-200">·</span>
-        {% endif %}
-        {% if vr.arrival_requested_time %}
-          <span class="font-bold text-gray-600">{{ vr.arrival_requested_time|time:"H:i" }}</span>
-          {% if assignment.arranged_arrival_time %}
-            <i class="fa-solid fa-arrow-right text-indigo-300 text-[10px]"></i>
-            <span class="font-bold text-indigo-500">{{ assignment.arranged_arrival_time|time:"H:i" }}</span>
-          {% endif %}
-          <span class="text-gray-400">到着</span>
-        {% endif %}
-        {% if not vr.requested_time and not vr.arrival_requested_time %}
-          <span class="text-gray-300 italic">時間未定</span>
-        {% endif %}
-        {# 配置済みバッジ #}
-        <span x-show="isAssigned({{ assignment.pk }})"
-              x-cloak
-              class="ml-auto px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-600 font-bold text-[10px]">
-          配置済
-        </span>
-      </div>
-
-      {# ルート #}
-      <div class="text-sm leading-tight">
-        {% if vr.route_from %}
-          <span class="text-gray-500 text-xs">{{ vr.route_from }}</span>
-          <i class="fa-solid fa-arrow-right text-gray-300 mx-1 text-[10px]"></i>
-        {% endif %}
-        <span class="font-bold text-gray-900">{{ vr.route_to|default:"目的地未設定" }}</span>
-      </div>
-
-      {# タグ #}
-      <div class="flex flex-wrap items-center gap-1 text-[11px]">
-        {% if vr.is_manager_added %}
-          <span class="px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 font-bold">追加</span>
-        {% endif %}
-        <span class="font-bold text-indigo-700">{{ vr.effective_production.title|default:"—" }}</span>
-        {% if vr.effective_process_type %}
-          <span class="text-gray-300">/</span>
-          <span class="text-gray-500">{{ vr.effective_process_type.name }}</span>
-        {% endif %}
-        <span class="px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-600 font-bold border border-sky-100">
-          {{ vr.get_request_kind_display }}
-        </span>
-      </div>
-
-      {% if vr.requested_vehicle %}
-        <div class="text-[11px] text-gray-400">申請車両: {{ vr.requested_vehicle.name }}</div>
+    {# ルート #}
+    <div class="text-sm leading-tight mb-1.5">
+      {% if vr.route_from %}
+        <span class="text-gray-400 text-xs">{{ vr.route_from }}</span>
+        <i class="fa-solid fa-arrow-right text-gray-300 mx-1 text-[10px]"></i>
       {% endif %}
-
+      <span class="font-bold text-gray-900">{{ vr.route_to|default:"目的地未設定" }}</span>
     </div>
+
+    {# タグ #}
+    <div class="flex flex-wrap items-center gap-1 text-[11px]">
+      {% if vr.is_manager_added %}
+        <span class="px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 font-bold">追加</span>
+      {% endif %}
+      <span class="font-bold text-indigo-700">{{ vr.effective_production.title|default:"—" }}</span>
+      {% if vr.effective_process_type %}
+        <span class="text-gray-300">/</span>
+        <span class="text-gray-500">{{ vr.effective_process_type.name }}</span>
+      {% endif %}
+      <span class="px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-600 font-bold border border-sky-100">
+        {{ vr.get_request_kind_display }}
+      </span>
+    </div>
+
+    {% if vr.requested_vehicle %}
+      <div class="text-[11px] text-gray-400 mt-1">申請車両: {{ vr.requested_vehicle.name }}</div>
+    {% endif %}
+
+  </div>
+
+  {# 下部: dep / arr ドラッグハンドル #}
+  <div class="border-t border-gray-100">
+
+    {# dep ハンドル (indigo) #}
+    <div class="flex items-center gap-2 px-3 py-1.5 transition-colors"
+         x-bind:class="isHandleDisabled({{ assignment.pk }}, 'dep')
+           ? 'opacity-50 cursor-not-allowed'
+           : 'cursor-grab active:cursor-grabbing hover:bg-indigo-50/60'"
+         x-bind:draggable="String(!isHandleDisabled({{ assignment.pk }}, 'dep'))"
+         @dragstart="startDrag($event, {{ assignment.pk }}, 'dep')">
+      <i class="fa-solid fa-grip-vertical text-indigo-200 text-xs flex-none"></i>
+      <span class="inline-flex items-center px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 text-[10px] font-bold flex-none">
+        {% if vr.request_kind == 'load_in' %}荷積み{% else %}配車{% endif %}
+      </span>
+      <span class="text-xs tabular-nums font-bold text-indigo-700 flex-none">
+        {{ vr.requested_time|time:"H:i"|default:"—" }}
+      </span>
+      <span x-show="isDepAssigned({{ assignment.pk }})"
+            x-cloak
+            class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-600 font-bold">配置済</span>
+    </div>
+
+    {# arr ハンドル (emerald) #}
+    <div class="flex items-center gap-2 px-3 py-1.5 border-t border-gray-50 transition-colors rounded-b-xl"
+         x-bind:class="isHandleDisabled({{ assignment.pk }}, 'arr')
+           ? 'opacity-50 cursor-not-allowed'
+           : 'cursor-grab active:cursor-grabbing hover:bg-emerald-50/60'"
+         x-bind:draggable="String(!isHandleDisabled({{ assignment.pk }}, 'arr'))"
+         @dragstart="startDrag($event, {{ assignment.pk }}, 'arr')">
+      <i class="fa-solid fa-grip-vertical text-emerald-200 text-xs flex-none"></i>
+      <span class="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-bold flex-none">
+        {% if vr.request_kind == 'load_in' %}荷降ろし{% else %}到着{% endif %}
+      </span>
+      <span class="text-xs tabular-nums font-bold text-emerald-700 flex-none">
+        {{ vr.arrival_requested_time|time:"H:i"|default:"—" }}
+      </span>
+      <span x-show="isArrAssigned({{ assignment.pk }})"
+            x-cloak
+            class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-600 font-bold">配置済</span>
+    </div>
+
   </div>
 
 </div>

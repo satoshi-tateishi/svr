@@ -406,7 +406,23 @@ class VehicleRequest(models.Model):
     requested_time = models.TimeField(null=True, blank=True, verbose_name='配車希望時間')
     arrival_requested_time = models.TimeField(null=True, blank=True, verbose_name='到着希望時間')
     route_from = models.CharField(max_length=200, blank=True, default='', verbose_name='出発地')
+    location_from = models.ForeignKey(
+        'locations.Location',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='departures',
+        verbose_name='出発地（マスタ）',
+    )
     route_to = models.CharField(max_length=200, blank=True, default='', verbose_name='目的地')
+    location_to = models.ForeignKey(
+        'locations.Location',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='destinations',
+        verbose_name='目的地（マスタ）',
+    )
     note = models.TextField(blank=True, default='', verbose_name='備考')
     is_manager_added = models.BooleanField(default=False, verbose_name='管理側追加便')
     # 荷役人数申請（車両申請がある場合のみ有効）

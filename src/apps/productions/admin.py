@@ -47,6 +47,28 @@ class StaffRequestInline(admin.TabularInline):
 class VehicleRequestInline(admin.TabularInline):
     model = VehicleRequest
     extra = 1
+    fields = (
+        'requested_vehicle',
+        'request_kind',
+        'requested_time',
+        'arrival_requested_time',
+        'route_from',
+        'location_from',
+        'from_address',
+        'route_to',
+        'location_to',
+        'to_address',
+        'note',
+    )
+    readonly_fields = ('from_address', 'to_address')
+
+    @admin.display(description='出発地 住所')
+    def from_address(self, obj):
+        return obj.location_from.address if obj.location_from else '-'
+
+    @admin.display(description='目的地 住所')
+    def to_address(self, obj):
+        return obj.location_to.address if obj.location_to else '-'
 
 
 class ProcessDayInline(admin.TabularInline):

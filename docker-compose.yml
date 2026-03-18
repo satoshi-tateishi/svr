@@ -4,10 +4,13 @@ services:
     container_name: svr_db
     restart: always
     command: >
-      --innodb-buffer-pool-size=1G
-      --innodb-log-file-size=256M
+      mysqld
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=128M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}

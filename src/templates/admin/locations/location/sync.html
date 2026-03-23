@@ -1,0 +1,60 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}場所マスタ同期 | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">ホーム</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+  &rsaquo; <a href="{% url 'admin:locations_location_changelist' %}">場所マスタ</a>
+  &rsaquo; 同期
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>場所マスタ同期（shin-on_db）</h1>
+
+{% if result %}
+  <p class="success">
+    ✅ 同期が完了しました。
+  </p>
+  <table>
+    <tbody>
+      <tr>
+        <th>新規作成</th>
+        <td>{{ result.created }} 件</td>
+      </tr>
+      <tr>
+        <th>更新</th>
+        <td>{{ result.updated }} 件</td>
+      </tr>
+      <tr>
+        <th>無効化</th>
+        <td>{{ result.deactivated }} 件</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    <a href="{% url 'admin:locations_location_changelist' %}" class="button">場所マスタ一覧へ戻る</a>
+  </p>
+
+{% elif error %}
+  <p class="errornote">{{ error }}</p>
+  <p>
+    <a href="{% url 'admin:locations_location_sync' %}" class="button">戻る</a>
+  </p>
+
+{% else %}
+  <p>shin-on_db から場所マスタを取得し、ローカルDBに同期します。</p>
+  <ul>
+    <li>shin-on_db に存在する有効な場所を新規作成または更新します。</li>
+    <li>以前同期済みで API に存在しなくなったレコードは無効化されます。</li>
+    <li>手動登録したレコード（shin-on_db ID なし）は変更されません。</li>
+  </ul>
+  <form method="post">
+    {% csrf_token %}
+    <input type="submit" value="同期を実行する" class="default">
+    <a href="{% url 'admin:locations_location_changelist' %}" class="button cancel-link">キャンセル</a>
+  </form>
+{% endif %}
+{% endblock %}

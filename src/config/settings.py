@@ -158,6 +158,13 @@ PORTAL_LOGIN_URL = env('PORTAL_LOGIN_URL', default='http://localhost/login/')
 PORTAL_URL = '/'.join(PORTAL_LOGIN_URL.split('/')[:3]) + '/'
 
 # ============================================================
+# shin-on_db 内部API 設定
+# ============================================================
+
+# 同じサーバー上の shin-on_db コンテナへの接続URL
+SHIN_ON_DB_API_URL = env('SHIN_ON_DB_API_URL', default='http://shin-on_db_app')
+
+# ============================================================
 # セキュリティ設定（本番）
 # ============================================================
 

@@ -152,8 +152,8 @@ PORTAL_JWT_ISSUER = env('PORTAL_JWT_ISSUER', default='https://portal.shin-on1981
 # JWT の aud クレームと照合する対象（ポータルの PORTAL_JWT_AUDIENCE と一致させること）
 PORTAL_JWT_AUDIENCE = env('PORTAL_JWT_AUDIENCE', default='shin-on-apps')
 
-# 未認証時のリダイレクト先（開発: http://localhost/login/ / 本番: https://portal.shin-on1981.com/login/）
-PORTAL_LOGIN_URL = env('PORTAL_LOGIN_URL', default='http://localhost/login/')
+# 未認証時のリダイレクト先（開発: http://localhost:8000/login/ / 本番: https://portal.shin-on1981.com/login/）
+PORTAL_LOGIN_URL = env('PORTAL_LOGIN_URL', default='http://localhost:8000/login/')
 # ポータルトップURL（PORTAL_LOGIN_URL からパスを除いたベースURL）
 PORTAL_URL = '/'.join(PORTAL_LOGIN_URL.split('/')[:3]) + '/'
 

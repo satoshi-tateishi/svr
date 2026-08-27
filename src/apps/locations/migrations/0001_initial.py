@@ -4,31 +4,50 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Location',
+            name="Location",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('sort', models.PositiveIntegerField(default=0, verbose_name='表示順')),
-                ('name', models.CharField(max_length=200, verbose_name='場所名')),
-                ('furigana', models.CharField(blank=True, default='', max_length=200, verbose_name='ふりがな')),
-                ('postal_code', models.CharField(blank=True, default='', max_length=10, verbose_name='郵便番号')),
-                ('address', models.CharField(blank=True, default='', max_length=255, verbose_name='住所')),
-                ('note', models.TextField(blank=True, default='', verbose_name='備考')),
-                ('is_active', models.BooleanField(default=True, verbose_name='有効')),
-                ('created_at', models.DateTimeField(verbose_name='作成日時')),
-                ('updated_at', models.DateTimeField(verbose_name='更新日時')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("sort", models.PositiveIntegerField(default=0, verbose_name="表示順")),
+                ("name", models.CharField(max_length=200, verbose_name="場所名")),
+                (
+                    "furigana",
+                    models.CharField(
+                        blank=True, default="", max_length=200, verbose_name="ふりがな"
+                    ),
+                ),
+                (
+                    "postal_code",
+                    models.CharField(
+                        blank=True, default="", max_length=10, verbose_name="郵便番号"
+                    ),
+                ),
+                (
+                    "address",
+                    models.CharField(blank=True, default="", max_length=255, verbose_name="住所"),
+                ),
+                ("note", models.TextField(blank=True, default="", verbose_name="備考")),
+                ("is_active", models.BooleanField(default=True, verbose_name="有効")),
+                ("created_at", models.DateTimeField(verbose_name="作成日時")),
+                ("updated_at", models.DateTimeField(verbose_name="更新日時")),
             ],
             options={
-                'verbose_name': '場所',
-                'verbose_name_plural': '場所マスタ',
-                'ordering': ['sort', 'name'],
+                "verbose_name": "場所",
+                "verbose_name_plural": "場所マスタ",
+                "ordering": ["sort", "name"],
             },
         ),
     ]

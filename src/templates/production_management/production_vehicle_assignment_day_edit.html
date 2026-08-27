@@ -165,7 +165,7 @@ const DND_REMOVE_URL = "{% url 'productions:production_vehicle_assignment_dnd_re
 
               {# テーブルヘッダー #}
               <div class="px-4 py-2 bg-white border-b border-gray-100 flex items-center gap-3 text-[11px] font-bold text-gray-400 flex-none">
-                <span class="w-20 flex-none">申請時間</span>
+                <span class="w-12 flex-none">申請時間</span>
                 <span class="w-28 flex-none">管理時間</span>
                 <span class="w-32 flex-none">場所</span>
                 <span class="flex-1">備考</span>
@@ -197,8 +197,8 @@ const DND_REMOVE_URL = "{% url 'productions:production_vehicle_assignment_dnd_re
                   <div class="px-4 py-2.5 bg-white flex items-center gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100">
 
                     {# 申請時間 (表示のみ) #}
-                    <div class="w-20 flex-none">
-                      <span class="text-sm tabular-nums text-gray-500 px-2 py-1.5 block"
+                    <div class="w-12 flex-none">
+                      <span class="text-sm tabular-nums text-gray-500 block"
                             x-text="row.requestedTime || '—'"></span>
                     </div>
 

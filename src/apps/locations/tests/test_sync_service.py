@@ -2,7 +2,7 @@
 場所マスタ同期サービスのテスト
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -111,8 +111,8 @@ class TestSyncLocationsFromShinOnDb:
             name="古い劇場名",
             sort=99,
             is_active=True,
-            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-            updated_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            created_at=datetime(2025, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2025, 1, 1, tzinfo=UTC),
         )
         mock_get.return_value = _make_mock_response(SAMPLE_API_RESPONSE)
 
@@ -134,8 +134,8 @@ class TestSyncLocationsFromShinOnDb:
             name="削除済み場所",
             sort=1,
             is_active=True,
-            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-            updated_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            created_at=datetime(2025, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2025, 1, 1, tzinfo=UTC),
         )
         mock_get.return_value = _make_mock_response(SAMPLE_API_RESPONSE)
 
@@ -153,8 +153,8 @@ class TestSyncLocationsFromShinOnDb:
             name="手動登録場所",
             sort=1,
             is_active=True,
-            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-            updated_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            created_at=datetime(2025, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2025, 1, 1, tzinfo=UTC),
         )
         mock_get.return_value = _make_mock_response(SAMPLE_API_RESPONSE)
 

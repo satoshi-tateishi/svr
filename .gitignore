@@ -40,6 +40,9 @@ keys/
 *~
 sample/
 
+# ローカルの拠点インポートデータ（連絡先などの実データを含む）
+/csv/locations.csv
+
 # OS
 .DS_Store
 Thumbs.db

@@ -53,8 +53,10 @@ services:
       redis:
         condition: service_started
     networks:
-      - svr_network
-      - shin-on-internal  # portal-app:8000 への JWKS 通信用
+      svr_network:
+      shin-on-internal:
+        aliases:
+          - svr-app
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/', timeout=2)"]
       interval: 30s

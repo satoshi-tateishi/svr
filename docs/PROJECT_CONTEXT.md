@@ -20,6 +20,7 @@ URL 実装の現状は次の通りです。
 
 - `/` は `/productions/dashboard/` にリダイレクト
 - `/auth/` は Portal SSO 用導線
+- `/healthz/` は認証・DBアクセスなしで204を返すコンテナ応答確認
 - `/productions/` は公演一覧・公演詳細・工程ブロック編集・車両手配管理
 - `/performances/` は独立 UI を持たず、`/productions/dashboard/` にリダイレクト
 
